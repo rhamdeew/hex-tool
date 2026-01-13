@@ -5,19 +5,44 @@ use crate::markdown::{Draft, ImageInfo, Page, Post};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::command;
+use tauri::AppHandle;
 
 // ====================
 // Project Commands
 // ====================
 
 #[command]
-pub fn select_project_folder(project_path: String) -> Result<String, String> {
-    // Validate it's a Hexo project
-    let path = PathBuf::from(&project_path);
-    let project = HexoProject::new(path);
-    project.validate()?;
+pub async fn select_project_folder(app: AppHandle) -> Result<String, String> {
+    use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
-    Ok(project_path)
+    // Open folder picker dialog
+    let folder_path = app.dialog()
+        .file()
+        .set_title("Select Hexo Project Folder")
+        .blocking_pick_folder();
+
+    if let Some(path) = folder_path {
+        // Convert FilePath to PathBuf
+        let path_buf = PathBuf::from(path.to_string());
+        let path_string = path_buf.to_string_lossy().to_string();
+
+        // Validate it's a Hexo project
+        let project = HexoProject::new(path_buf);
+        match project.validate() {
+            Ok(_) => Ok(path_string),
+            Err(e) => {
+                // Show error dialog to user
+                app.dialog()
+                    .message(format!("Invalid Hexo project: {}", e))
+                    .kind(MessageDialogKind::Error)
+                    .title("Invalid Project")
+                    .blocking_show();
+                Err(format!("Invalid Hexo project: {}", e))
+            }
+        }
+    } else {
+        Err("No folder selected".to_string())
+    }
 }
 
 #[command]
@@ -85,7 +110,7 @@ pub fn get_post(project_path: String, post_id: String) -> Result<Post, String> {
 }
 
 #[command]
-pub fn save_post(project_path: String, post: Post) -> Result<(), String> {
+pub fn save_post(_project_path: String, post: Post) -> Result<(), String> {
     let file_path = Path::new(&post.file_path);
 
     let markdown = post.to_markdown()?;
@@ -398,7 +423,7 @@ fn transliterate_russian(text: &str) -> String {
 fn create_image_info(
     image_path: &Path,
     images_dir: &Path,
-    project_path: &Path,
+    _project_path: &Path,
 ) -> Result<ImageInfo, String> {
     let metadata = fs::metadata(image_path)
         .map_err(|e| format!("Failed to get image metadata: {}", e))?;
@@ -445,7 +470,7 @@ fn create_image_info(
     })
 }
 
-fn get_image_dimensions(path: &Path) -> (Option<u32>, Option<u32>) {
+fn get_image_dimensions(_path: &Path) -> (Option<u32>, Option<u32>) {
     // For now, return None. Can be implemented with image crate later
     (None, None)
 }

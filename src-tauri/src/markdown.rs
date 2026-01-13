@@ -4,7 +4,7 @@ use crate::files;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -34,13 +34,47 @@ impl MarkdownDocument {
     pub fn parse(raw: &str) -> Result<Self, String> {
         // Check if the document starts with frontmatter delimiter
         if !raw.starts_with("---") {
-            return Err("No frontmatter found".to_string());
+            // No frontmatter found - create default frontmatter
+            let frontmatter = Frontmatter {
+                title: "Untitled Post".to_string(),
+                date: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                tags: Vec::new(),
+                categories: Vec::new(),
+                permalink: None,
+                list_image: None,
+                list_image_alt: None,
+                main_image: None,
+                main_image_alt: None,
+                custom_fields: HashMap::new(),
+            };
+
+            return Ok(Self {
+                frontmatter,
+                content: raw.to_string(),
+            });
         }
 
         // Find the end of frontmatter
         let parts: Vec<&str> = raw.splitn(3, "---").collect();
         if parts.len() < 3 {
-            return Err("Invalid frontmatter format".to_string());
+            // Invalid frontmatter format - treat entire content as markdown
+            let frontmatter = Frontmatter {
+                title: "Untitled Post".to_string(),
+                date: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                tags: Vec::new(),
+                categories: Vec::new(),
+                permalink: None,
+                list_image: None,
+                list_image_alt: None,
+                main_image: None,
+                main_image_alt: None,
+                custom_fields: HashMap::new(),
+            };
+
+            return Ok(Self {
+                frontmatter,
+                content: raw.to_string(),
+            });
         }
 
         // Parse YAML frontmatter
@@ -120,6 +154,21 @@ impl Draft {
     }
 }
 
+// Helper function to extract title from markdown content
+fn extract_title_from_markdown(content: &str) -> Option<String> {
+    for line in content.lines() {
+        let trimmed = line.trim();
+        // Look for H1 heading: # Title
+        if trimmed.starts_with("# ") {
+            let title = trimmed.trim_start_matches('#').trim();
+            if !title.is_empty() {
+                return Some(title.to_string());
+            }
+        }
+    }
+    None
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageInfo {
@@ -137,7 +186,7 @@ impl Post {
     pub fn from_file(file_path: &Path, project_path: &Path) -> Result<Self, String> {
         let content = files::read_file(file_path)?;
 
-        let doc = MarkdownDocument::parse(&content)?;
+        let mut doc = MarkdownDocument::parse(&content)?;
 
         // Get file metadata
         let metadata = fs::metadata(file_path)
@@ -157,6 +206,27 @@ impl Post {
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d: std::time::Duration| d.as_secs() as i64)
             .unwrap_or(0);
+
+        // If title is "Untitled Post", try to extract from content or filename
+        if doc.frontmatter.title == "Untitled Post" {
+            // Try to extract title from first H1 heading
+            if let Some(title) = extract_title_from_markdown(&doc.content) {
+                doc.frontmatter.title = title;
+            } else {
+                // Use filename without extension
+                let filename = file_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("Untitled Post");
+                doc.frontmatter.title = filename.to_string();
+            }
+        }
+
+        // Use file modified time as date if date is current time (indicating it was generated)
+        let file_date = chrono::DateTime::<chrono::Local>::from(
+            metadata.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+        );
+        doc.frontmatter.date = file_date.format("%Y-%m-%d %H:%M:%S").to_string();
 
         // Generate ID (relative path from source/_posts/)
         let id = file_path

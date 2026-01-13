@@ -34,7 +34,7 @@ export class BackendService {
   // ====================
 
   async selectProjectFolder(): Promise<string> {
-    const path = await invoke<string>('select_project_folder', { projectPath: '' });
+    const path = await invoke<string>('select_project_folder');
     this.setProjectPath(path);
     return path;
   }
