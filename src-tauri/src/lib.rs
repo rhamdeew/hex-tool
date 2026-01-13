@@ -12,7 +12,23 @@ use commands::*;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, test_connection])
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            select_project_folder,
+            get_project_config,
+            list_posts,
+            get_post,
+            save_post,
+            create_post,
+            delete_post,
+            list_pages,
+            list_drafts,
+            list_images,
+            copy_image_to_project,
+            delete_image,
+            get_app_config,
+            save_app_config,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
