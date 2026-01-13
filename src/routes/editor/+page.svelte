@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { goto } from '$app/navigation';
+  import { goto, beforeNavigate } from '$app/navigation';
   import { ArrowLeft, Save, Settings } from 'lucide-svelte';
   import TipTapEditor from '$lib/components/TipTapEditor.svelte';
   import EditorToolbar from '$lib/components/EditorToolbar.svelte';
@@ -11,7 +11,7 @@
   import { backend } from '$lib/services/backend';
   import type { Post, ImageInfo } from '$lib/types';
 
-  let editor: any;
+  let editor = $state<any>(null);
   let post = $state<Post | null>(null);
   let showFrontmatter = $state(false);
   let showImageGallery = $state(false);
@@ -23,6 +23,15 @@
   let images = $state<ImageInfo[]>([]);
   let pendingImageField = $state<'listImage' | 'mainImage' | null>(null);
   let editingContent = $state('');
+
+  // Intercept navigation to show unsaved changes warning
+  beforeNavigate((navigation) => {
+    if (saveStatus === 'unsaved') {
+      if (!confirm('You have unsaved changes. Are you sure you want to leave?')) {
+        navigation.cancel();
+      }
+    }
+  });
 
   onMount(async () => {
     // Get post ID from URL
@@ -215,13 +224,8 @@
   }
 
   function goBack() {
-    if (saveStatus === 'unsaved') {
-      if (confirm('You have unsaved changes. Are you sure you want to leave?')) {
-        goto('/posts');
-      }
-    } else {
-      goto('/posts');
-    }
+    // beforeNavigate will handle the unsaved changes check
+    goto('/posts');
   }
 
   function showSaveError(message: string) {
