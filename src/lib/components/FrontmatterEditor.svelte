@@ -4,9 +4,15 @@
 
   interface Props {
     frontmatter: Frontmatter;
+    onSelectListImage?: () => void;
+    onSelectMainImage?: () => void;
   }
 
-  let { frontmatter = $bindable() }: Props = $props();
+  let {
+    frontmatter = $bindable(),
+    onSelectListImage,
+    onSelectMainImage
+  }: Props = $props();
   let isOpen = $state(true);
 
   let newTagName = $state('');
@@ -97,6 +103,19 @@
           class="field-input"
           bind:value={frontmatter.date}
         />
+      </div>
+
+      <!-- Description -->
+      <div class="field-group">
+        <label for="description" class="field-label">Description</label>
+        <textarea
+          id="description"
+          class="field-textarea"
+          bind:value={frontmatter.description}
+          placeholder="Brief description of the post for SEO and previews"
+          rows="3"
+        ></textarea>
+        <span class="field-hint">Used in meta tags and post previews</span>
       </div>
 
       <!-- Tags -->
@@ -201,7 +220,12 @@
             bind:value={frontmatter.listImage}
             placeholder="/images/my-image.jpg"
           />
-          <button class="image-select-btn" type="button" title="Select from gallery">
+          <button
+            class="image-select-btn"
+            type="button"
+            title="Select from gallery"
+            onclick={onSelectListImage}
+          >
             <ImageIcon size={18} />
           </button>
         </div>
@@ -235,7 +259,12 @@
             bind:value={frontmatter.mainImage}
             placeholder="/images/my-image.jpg"
           />
-          <button class="image-select-btn" type="button" title="Select from gallery">
+          <button
+            class="image-select-btn"
+            type="button"
+            title="Select from gallery"
+            onclick={onSelectMainImage}
+          >
             <ImageIcon size={18} />
           </button>
         </div>
@@ -411,6 +440,30 @@
   :global(.dark .field-input:disabled) {
     background-color: #2d2d2d;
     color: #666666;
+  }
+
+  .field-textarea {
+    padding: 0.625rem 0.75rem;
+    background-color: #ffffff;
+    border: 1px solid #e5e5e5;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    color: #1a1a1a;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 4rem;
+  }
+
+  :global(.dark .field-textarea) {
+    background-color: #404040;
+    border-color: #525252;
+    color: #f5f5f5;
+  }
+
+  .field-textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   .field-hint {

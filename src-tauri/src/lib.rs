@@ -28,6 +28,10 @@ pub fn run() {
             delete_image,
             get_app_config,
             save_app_config,
+            run_hexo_command,
+            start_hexo_server,
+            stop_hexo_server,
+            is_hexo_server_running,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

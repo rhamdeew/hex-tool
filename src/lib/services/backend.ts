@@ -1,6 +1,6 @@
 // Backend service for Tauri command invocations
 import { invoke } from '@tauri-apps/api/core';
-import type { Post, Page, Draft, ImageInfo, HexoConfig, AppConfig } from '$lib/types';
+import type { Post, Page, Draft, ImageInfo, HexoConfig, AppConfig, CommandOutput } from '$lib/types';
 
 export class BackendService {
   private projectPath: string | null = null;
@@ -120,6 +120,29 @@ export class BackendService {
 
   async saveAppConfig(config: AppConfig): Promise<void> {
     await invoke('save_app_config', { config });
+  }
+
+  // ====================
+  // Hexo Server Commands
+  // ====================
+
+  async runHexoCommand(command: string): Promise<CommandOutput> {
+    const projectPath = this.ensureProject();
+    return invoke<CommandOutput>('run_hexo_command', { projectPath, command });
+  }
+
+  async startHexoServer(): Promise<string> {
+    const projectPath = this.ensureProject();
+    return invoke<string>('start_hexo_server', { projectPath });
+  }
+
+  async stopHexoServer(serverId: string): Promise<void> {
+    await invoke('stop_hexo_server', { serverId });
+  }
+
+  async isHexoServerRunning(): Promise<boolean> {
+    const projectPath = this.ensureProject();
+    return invoke<boolean>('is_hexo_server_running', { projectPath });
   }
 }
 

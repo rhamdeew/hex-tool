@@ -29,7 +29,15 @@ pub async fn select_project_folder(app: AppHandle) -> Result<String, String> {
         // Validate it's a Hexo project
         let project = HexoProject::new(path_buf);
         match project.validate() {
-            Ok(_) => Ok(path_string),
+            Ok(_) => {
+                // Add to recent projects
+                let mut config = crate::config::AppConfig::load()
+                    .unwrap_or_default();
+                config.add_recent_project(path_string.clone());
+                let _ = config.save(); // Ignore save errors
+
+                Ok(path_string)
+            },
             Err(e) => {
                 // Show error dialog to user
                 app.dialog()
@@ -144,6 +152,7 @@ pub fn create_post(project_path: String, title: String) -> Result<Post, String> 
         date: date_str,
         tags: Vec::new(),
         categories: Vec::new(),
+        description: None,
         permalink: None,
         list_image: None,
         list_image_alt: None,
@@ -578,4 +587,31 @@ pub struct HexoConfig {
     pub url: String,
     #[serde(flatten)]
     pub other: serde_json::Value,
+}
+
+// ====================
+// Hexo Commands
+// ====================
+
+#[command]
+pub fn run_hexo_command(project_path: String, command: String) -> Result<crate::hexo::CommandOutput, String> {
+    let project = HexoProject::new(PathBuf::from(&project_path));
+    project.run_command(&command)
+}
+
+#[command]
+pub fn start_hexo_server(project_path: String) -> Result<String, String> {
+    let project = HexoProject::new(PathBuf::from(&project_path));
+    project.start_server()
+}
+
+#[command]
+pub fn stop_hexo_server(server_id: String) -> Result<(), String> {
+    HexoProject::stop_server(&server_id)
+}
+
+#[command]
+pub fn is_hexo_server_running(project_path: String) -> Result<bool, String> {
+    let project = HexoProject::new(PathBuf::from(&project_path));
+    Ok(project.is_server_running())
 }

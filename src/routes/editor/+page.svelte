@@ -163,6 +163,16 @@
     showImageGallery = true;
   }
 
+  function selectListImage() {
+    pendingImageField = 'listImage';
+    showImageGallery = true;
+  }
+
+  function selectMainImage() {
+    pendingImageField = 'mainImage';
+    showImageGallery = true;
+  }
+
   async function handleImageSelect(image: ImageInfo) {
     if (pendingImageField && post) {
       // Update frontmatter
@@ -269,7 +279,11 @@
     <!-- Frontmatter Editor (collapsible) -->
     {#if post && showFrontmatter}
       <div class="frontmatter-section">
-        <FrontmatterEditor bind:frontmatter={post.frontmatter} />
+        <FrontmatterEditor
+          bind:frontmatter={post.frontmatter}
+          onSelectListImage={selectListImage}
+          onSelectMainImage={selectMainImage}
+        />
       </div>
     {/if}
 

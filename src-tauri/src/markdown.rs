@@ -15,6 +15,7 @@ pub struct Frontmatter {
     pub tags: Vec<String>,
     #[serde(default)]
     pub categories: Vec<String>,
+    pub description: Option<String>,
     pub permalink: Option<String>,
     pub list_image: Option<String>,
     pub list_image_alt: Option<String>,
@@ -40,6 +41,7 @@ impl MarkdownDocument {
                 date: "".to_string(), // Empty date - will be filled with file time
                 tags: Vec::new(),
                 categories: Vec::new(),
+                description: None,
                 permalink: None,
                 list_image: None,
                 list_image_alt: None,
@@ -63,6 +65,7 @@ impl MarkdownDocument {
                 date: "".to_string(), // Empty date - will be filled with file time
                 tags: Vec::new(),
                 categories: Vec::new(),
+                description: None,
                 permalink: None,
                 list_image: None,
                 list_image_alt: None,

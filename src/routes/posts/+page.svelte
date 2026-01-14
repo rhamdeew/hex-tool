@@ -2,8 +2,7 @@
   import { onMount } from 'svelte';
   import { Plus, FolderOpen } from 'lucide-svelte';
   import { backend } from '$lib/services/backend';
-  import { PostList } from '$lib/components';
-  import { ImageGallery } from '$lib/components';
+  import { PostList, ImageGallery, HexoControls } from '$lib/components';
   import type { Post, ImageInfo } from '$lib/types';
 
   let posts: Post[] = $state([]);
@@ -162,6 +161,13 @@
     </div>
   </header>
 
+  <!-- Hexo Controls (shown when project is selected) -->
+  {#if backend.getProjectPath()}
+    <div class="hexo-controls-wrapper">
+      <HexoControls />
+    </div>
+  {/if}
+
   <!-- Content -->
   <main class="page-content">
     {#if loading}
@@ -260,6 +266,17 @@
   .header-right {
     display: flex;
     gap: 0.75rem;
+  }
+
+  .hexo-controls-wrapper {
+    padding: 1rem 2rem;
+    background-color: #ffffff;
+    border-bottom: 1px solid #e5e5e5;
+  }
+
+  :global(.dark .hexo-controls-wrapper) {
+    background-color: #2d2d2d;
+    border-bottom-color: #404040;
   }
 
   .create-btn,

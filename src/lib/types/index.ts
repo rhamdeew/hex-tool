@@ -16,6 +16,7 @@ export interface Frontmatter {
   date: string;
   tags: string[];
   categories: string[];
+  description?: string;
   permalink?: string;
   listImage?: string;
   listImageAlt?: string;
