@@ -16,7 +16,8 @@
     "lint": "eslint . --ext .js,.ts,.svelte",
     "lint:fix": "eslint . --ext .js,.ts,.svelte --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test": "vitest run"
   },
   "license": "MIT",
   "dependencies": {
@@ -51,6 +52,7 @@
     "svelte-eslint-parser": "^1.4.1",
     "tailwindcss": "^3.4.19",
     "typescript": "~5.6.2",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "vitest": "^3.2.4"
   }
 }

@@ -65,6 +65,7 @@ npm run dev
 - `npm run check`: run Svelte/TypeScript checks.
 - `npm run lint`: run ESLint.
 - `npm run format`: format code with Prettier.
+- `npm run test`: run frontend unit tests.
 - `make cargo-check`: check the Rust backend in `src-tauri/`.
 - `make cargo-clippy`: lint Rust code.
 - `make cargo-test`: run Rust tests.

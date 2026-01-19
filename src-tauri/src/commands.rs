@@ -559,7 +559,7 @@ pub fn copy_image_to_project(
         dest_path
     };
 
-    fs::copy(&source, &final_dest)
+    fs::copy(source, &final_dest)
         .map_err(|e| format!("Failed to copy image: {}", e))?;
 
     // Return URL path for markdown

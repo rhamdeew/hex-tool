@@ -298,3 +298,40 @@ impl Post {
         Ok(format!("---\n{}---\n\n{}", frontmatter_yaml, self.content))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::MarkdownDocument;
+
+    #[test]
+    fn parse_standard_frontmatter() {
+        let raw = "---\ntitle: \"Hello\"\ndate: \"2024-01-01 10:00:00\"\n---\nBody";
+        let (doc, had_no_frontmatter) = MarkdownDocument::parse(raw).expect("parse failed");
+
+        assert!(!had_no_frontmatter);
+        assert_eq!(doc.frontmatter.title, "Hello");
+        assert_eq!(doc.frontmatter.date, "2024-01-01 10:00:00");
+        assert_eq!(doc.content, "Body");
+    }
+
+    #[test]
+    fn parse_alternative_frontmatter() {
+        let raw = "title: \"Alt\"\ndate: \"2024-01-02\"\n---\nAlt body";
+        let (doc, had_no_frontmatter) = MarkdownDocument::parse(raw).expect("parse failed");
+
+        assert!(!had_no_frontmatter);
+        assert_eq!(doc.frontmatter.title, "Alt");
+        assert_eq!(doc.frontmatter.date, "2024-01-02");
+        assert_eq!(doc.content, "Alt body");
+    }
+
+    #[test]
+    fn parse_without_frontmatter_defaults() {
+        let raw = "Just text";
+        let (doc, had_no_frontmatter) = MarkdownDocument::parse(raw).expect("parse failed");
+
+        assert!(had_no_frontmatter);
+        assert_eq!(doc.frontmatter.title, "Untitled Post");
+        assert_eq!(doc.content, "Just text");
+    }
+}
