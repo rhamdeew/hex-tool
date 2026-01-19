@@ -2,7 +2,9 @@
 
 use crate::hexo::HexoProject;
 use crate::markdown::{Draft, ImageInfo, Page, Post};
-use crate::frontmatter_config::{load_frontmatter_config, FrontmatterConfig};
+use crate::frontmatter_config::{
+    generate_frontmatter_config, load_frontmatter_config, FrontmatterConfig,
+};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::command;
@@ -75,6 +77,31 @@ pub fn get_project_config(project_path: String) -> Result<HexoConfig, String> {
 #[command]
 pub fn get_frontmatter_config(project_path: String) -> Result<FrontmatterConfig, String> {
     load_frontmatter_config(Path::new(&project_path))
+}
+
+#[command]
+pub fn generate_frontmatter_config_command(project_path: String) -> Result<FrontmatterConfig, String> {
+    let config_path = Path::new(&project_path)
+        .join(".hex-tool")
+        .join("frontmatter-config.json");
+
+    if config_path.exists() {
+        return Err("frontmatter-config.json already exists".to_string());
+    }
+
+    let config = generate_frontmatter_config(Path::new(&project_path))?;
+
+    if let Some(parent) = config_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create .hex-tool directory: {}", e))?;
+    }
+
+    let content = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize frontmatter config: {}", e))?;
+    fs::write(&config_path, content)
+        .map_err(|e| format!("Failed to write frontmatter config: {}", e))?;
+
+    Ok(config)
 }
 
 // ====================

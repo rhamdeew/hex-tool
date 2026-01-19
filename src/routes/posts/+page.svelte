@@ -21,6 +21,7 @@
   let pendingImageField:
     | { fieldName: string; post: Post }
     | null = null;
+  let isGeneratingFrontmatterConfig = $state(false);
   let createKind = $derived(
     activeTab === 'pages' ? 'Page' :
     activeTab === 'drafts' ? 'Draft' :
@@ -247,6 +248,27 @@
     pendingImageField = { fieldName, post };
     showImageGallery = true;
   }
+
+  async function handleGenerateFrontmatterConfig() {
+    if (isGeneratingFrontmatterConfig) return;
+    isGeneratingFrontmatterConfig = true;
+
+    try {
+      frontmatterConfig = await backend.generateFrontmatterConfig();
+      await message('Frontmatter config generated successfully.', {
+        title: 'Hex Tool'
+      });
+    } catch (err) {
+      console.error('Failed to generate frontmatter config:', err);
+      await message(
+        'Failed to generate frontmatter config: ' +
+          (err instanceof Error ? err.message : 'Unknown error'),
+        { title: 'Hex Tool', kind: 'error' }
+      );
+    } finally {
+      isGeneratingFrontmatterConfig = false;
+    }
+  }
 </script>
 
 <div class="posts-page">
@@ -297,6 +319,23 @@
         </button>
       </div>
     {:else if posts.length === 0}
+      {#if frontmatterConfig?.isDefault}
+        <div class="info-banner">
+          <div class="info-banner-content">
+            <span>
+              No frontmatter config found. Generate one from existing posts to enable custom fields.
+            </span>
+            <button
+              class="info-banner-btn"
+              onclick={handleGenerateFrontmatterConfig}
+              disabled={isGeneratingFrontmatterConfig}
+              type="button"
+            >
+              {isGeneratingFrontmatterConfig ? 'Generating...' : 'Generate Config'}
+            </button>
+          </div>
+        </div>
+      {/if}
       <div class="empty-state">
         <div class="empty-icon">📝</div>
         <h3>No posts yet</h3>
@@ -307,6 +346,23 @@
         </button>
       </div>
     {:else}
+      {#if frontmatterConfig?.isDefault}
+        <div class="info-banner">
+          <div class="info-banner-content">
+            <span>
+              No frontmatter config found. Generate one from existing posts to enable custom fields.
+            </span>
+            <button
+              class="info-banner-btn"
+              onclick={handleGenerateFrontmatterConfig}
+              disabled={isGeneratingFrontmatterConfig}
+              type="button"
+            >
+              {isGeneratingFrontmatterConfig ? 'Generating...' : 'Generate Config'}
+            </button>
+          </div>
+        </div>
+      {/if}
       {#if previewImageWarning}
         <div class="warning-banner">
           {previewImageWarning}
@@ -635,6 +691,49 @@
     border-color: #eab308;
     background-color: #422006;
     color: #fef08a;
+  }
+
+  .info-banner {
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #93c5fd;
+    background-color: #eff6ff;
+    color: #1e3a8a;
+    font-size: 0.875rem;
+  }
+
+  :global(.dark .info-banner) {
+    border-color: #2563eb;
+    background-color: #0f172a;
+    color: #bfdbfe;
+  }
+
+  .info-banner-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .info-banner-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.375rem 0.75rem;
+    border-radius: 0.375rem;
+    border: 1px solid #2563eb;
+    background-color: #2563eb;
+    color: #ffffff;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .info-banner-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
   }
 
   /* Loading State */

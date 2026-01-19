@@ -45,6 +45,7 @@ export interface FrontmatterFieldGroup {
 export interface FrontmatterConfig {
   version: string;
   previewImageField?: string;
+  isDefault?: boolean;
   customFields: FrontmatterFieldConfig[];
   fieldGroups: FrontmatterFieldGroup[];
 }

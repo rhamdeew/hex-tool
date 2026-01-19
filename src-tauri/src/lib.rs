@@ -18,6 +18,7 @@ pub fn run() {
             select_project_folder,
             get_project_config,
             get_frontmatter_config,
+            generate_frontmatter_config_command,
             list_posts,
             get_post,
             save_post,

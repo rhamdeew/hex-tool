@@ -58,6 +58,11 @@ export class BackendService {
     return invoke<FrontmatterConfig>('get_frontmatter_config', { projectPath });
   }
 
+  async generateFrontmatterConfig(): Promise<FrontmatterConfig> {
+    const projectPath = this.ensureProject();
+    return invoke<FrontmatterConfig>('generate_frontmatter_config_command', { projectPath });
+  }
+
   // ====================
   // Posts Commands
   // ====================
