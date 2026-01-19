@@ -2,11 +2,43 @@
 
 Hex Tool is a desktop GUI editor for Hexo blogs built with Tauri, SvelteKit, and TypeScript. It provides a fast, native-feeling workflow for editing posts and managing content while keeping the project structure on disk.
 
-## Recommended IDE Setup
+![Hex Tool screenshot](https://github.com/user-attachments/assets/5ab82e89-0988-41e4-9e79-8bef137bf529)
+
+## Usage
+
+1. Download a build for your platform from the "Releases" page.
+2. Launch the app and select your Hexo project folder (the one with `package.json` and `source/`).
+3. Manage posts, pages, and drafts, then edit content with live frontmatter controls.
+4. Use the Hexo controls to run `hexo server`, `hexo generate`, `hexo clean`, and `hexo deploy` from the UI.
+
+### Requirements for Hexo Commands
+
+Hexo commands run through `npx hexo`, so your blog should have dependencies installed:
+
+```sh
+cd /path/to/your/hexo/blog
+npm install
+```
+
+If you only edit Markdown files, the app still works without running Hexo commands.
+
+### Frontmatter Configuration (Optional)
+
+Hex Tool supports custom frontmatter fields via `frontmatter-config.json` in the project root. You can generate a starter config from existing posts using the "Generate frontmatter config" action in the app.
+
+## Development
+
+### Recommended IDE Setup
 
 [VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
 
-## Getting Started
+### Prerequisites
+
+- Node.js (LTS recommended)
+- Rust toolchain (`rustup`)
+- Tauri system dependencies: https://tauri.app/start/prerequisites/
+
+### Getting Started
 
 Install dependencies:
 
@@ -26,7 +58,7 @@ Run frontend-only development:
 npm run dev
 ```
 
-## Key Commands
+### Key Commands
 
 - `npm run build`: build the frontend.
 - `npm run build:tauri`: build the full Tauri app.
@@ -34,8 +66,10 @@ npm run dev
 - `npm run lint`: run ESLint.
 - `npm run format`: format code with Prettier.
 - `make cargo-check`: check the Rust backend in `src-tauri/`.
+- `make cargo-clippy`: lint Rust code.
+- `make cargo-test`: run Rust tests.
 
-## Project Layout
+### Project Layout
 
 - `src/`: SvelteKit frontend (`routes/` and `lib/`).
 - `src-tauri/`: Rust backend and Tauri configuration.
