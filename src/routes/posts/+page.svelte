@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Plus, FolderOpen, X } from 'lucide-svelte';
+  import { Plus, FolderOpen, X, ArrowLeft } from 'lucide-svelte';
   import { confirm, message } from '@tauri-apps/plugin-dialog';
   import { backend } from '$lib/services/backend';
   import { PostList, ImageGallery, HexoControls } from '$lib/components';
   import type { Post, Page, Draft, ImageInfo, FrontmatterConfig } from '$lib/types';
+  import { goto } from '$app/navigation';
 
   let posts: Post[] = $state([]);
   let pages: Page[] = $state([]);
@@ -199,6 +200,11 @@
     }
   }
 
+  function goToStartScreen() {
+    backend.setProjectPath('');
+    goto('/');
+  }
+
   function handleImageSelect(image: ImageInfo) {
     // This will be called when an image is selected from gallery
     if (pendingImageField) {
@@ -280,6 +286,10 @@
     </div>
 
     <div class="header-right">
+      <button class="back-start-btn" onclick={goToStartScreen} type="button">
+        <ArrowLeft size={18} />
+        <span>Back to Start</span>
+      </button>
       {#if !backend.getProjectPath()}
         <button class="select-project-btn" onclick={handleSelectProject} type="button">
           <FolderOpen size={18} />
@@ -618,6 +628,7 @@
   .header-right {
     display: flex;
     gap: 0.75rem;
+    flex-wrap: wrap;
   }
 
   .hexo-controls-wrapper {
@@ -650,6 +661,35 @@
   .create-btn:hover,
   .select-project-btn:hover {
     background-color: #2563eb;
+  }
+
+  .back-start-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    background-color: #ffffff;
+    color: #1f2937;
+    border: 1px solid #e5e5e5;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  :global(.dark .back-start-btn) {
+    background-color: #1f1f1f;
+    border-color: #404040;
+    color: #e5e7eb;
+  }
+
+  .back-start-btn:hover {
+    background-color: #f7f7f7;
+  }
+
+  :global(.dark .back-start-btn:hover) {
+    background-color: #2d2d2d;
   }
 
   .create-btn-empty {

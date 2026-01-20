@@ -1,6 +1,6 @@
 {
   "name": "hex-tool",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "GUI editor for Hexo blogs built with Tauri and Svelte",
   "type": "module",
   "scripts": {

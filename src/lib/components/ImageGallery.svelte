@@ -1,5 +1,13 @@
 <script lang="ts">
-  import { X, Search, Upload as UploadIcon, Trash2, Image as ImageIcon } from 'lucide-svelte';
+  import {
+    X,
+    Search,
+    Upload as UploadIcon,
+    Trash2,
+    Image as ImageIcon,
+    Folder,
+    ArrowLeft
+  } from 'lucide-svelte';
   import { convertFileSrc } from '@tauri-apps/api/core';
   import { backend } from '$lib/services/backend';
   import type { ImageInfo } from '$lib/types';
@@ -27,6 +35,7 @@
   let searchQuery = $state('');
   let sortBy = $state<'name' | 'date' | 'size'>('date');
   let selectedImage = $state<ImageInfo | null>(null);
+  let currentFolder = $state('');
 
   const resolveImageSrc = (image: ImageInfo) => {
     if (image.fullPath) return convertFileSrc(image.fullPath);
@@ -50,9 +59,52 @@
     displaySrc: resolveImageSrc(img)
   })) as ImageWithSrc[]);
 
+  const getImageDir = (image: ImageInfo) => {
+    const parts = image.path.split('/').filter(Boolean);
+    if (parts.length <= 1) return '';
+    return parts.slice(0, -1).join('/');
+  };
+
+  let folderSegments = $derived(currentFolder ? currentFolder.split('/').filter(Boolean) : []);
+
+  let folderEntries = $derived((() => {
+    const folders = new Map<string, number>();
+
+    for (const image of imagesWithSrc) {
+      const dir = getImageDir(image);
+      if (!dir) continue;
+
+      if (!currentFolder) {
+        const child = dir.split('/')[0];
+        if (!child) continue;
+        folders.set(child, (folders.get(child) ?? 0) + 1);
+        continue;
+      }
+
+      if (dir.startsWith(`${currentFolder}/`)) {
+        const remainder = dir.slice(currentFolder.length + 1);
+        const child = remainder.split('/')[0];
+        if (child) {
+          folders.set(child, (folders.get(child) ?? 0) + 1);
+        }
+      }
+    }
+
+    return Array.from(folders.entries())
+      .map(([name, count]) => ({
+        name,
+        count,
+        path: currentFolder ? `${currentFolder}/${name}` : name
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  })());
+
   // Filter and sort images
   let filteredImages = $derived(imagesWithSrc
     .filter((img) => {
+      const inFolder = getImageDir(img) === currentFolder;
+      if (!inFolder) return false;
+
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         return (
@@ -98,10 +150,54 @@
   function handleImageClick(image: ImageInfo) {
     selectedImage = image;
   }
+
+  function navigateToFolder(path: string) {
+    currentFolder = path;
+    selectedImage = null;
+  }
+
+  function goUp() {
+    if (!currentFolder) return;
+    const parts = currentFolder.split('/').filter(Boolean);
+    parts.pop();
+    currentFolder = parts.join('/');
+    selectedImage = null;
+  }
+
+  function goToRoot() {
+    currentFolder = '';
+    selectedImage = null;
+  }
+
+  function goToBreadcrumb(index: number) {
+    currentFolder = folderSegments.slice(0, index + 1).join('/');
+    selectedImage = null;
+  }
+
+  $effect(() => {
+    const selected = selectedImage;
+    if (!selected) return;
+    const stillVisible = filteredImages.some((img) => img.fullPath === selected.fullPath);
+    if (!stillVisible) {
+      selectedImage = null;
+    }
+  });
 </script>
 
 {#if open}
-  <div class="modal-overlay" onclick={() => (open = false)}>
+  <div
+    class="modal-overlay"
+    onclick={() => (open = false)}
+    role="button"
+    tabindex="0"
+    aria-label="Close image gallery"
+    onkeydown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        open = false;
+      }
+    }}
+  >
     <div class="modal-content" onclick={(e) => e.stopPropagation()}>
       <!-- Header -->
       <div class="modal-header">
@@ -119,7 +215,9 @@
       <!-- Search and Controls -->
       <div class="modal-controls">
         <div class="search-wrapper">
-          <Search size={18} class="search-icon" />
+          <span class="search-icon">
+            <Search size={18} />
+          </span>
           <input
             type="text"
             class="search-input"
@@ -144,8 +242,57 @@
         </div>
       </div>
 
+      <!-- Folder Navigation -->
+      <div class="browser-bar">
+        <button
+          class="folder-up-btn"
+          onclick={goUp}
+          type="button"
+          disabled={!currentFolder}
+          title="Go up"
+        >
+          <ArrowLeft size={16} />
+          <span>Up</span>
+        </button>
+        <div class="breadcrumbs">
+          <button class="breadcrumb" onclick={goToRoot} type="button">
+            Images
+          </button>
+          {#each folderSegments as segment, index (segment)}
+            <span class="breadcrumb-sep">/</span>
+            <button class="breadcrumb" onclick={() => goToBreadcrumb(index)} type="button">
+              {segment}
+            </button>
+          {/each}
+        </div>
+      </div>
+
       <!-- Images Grid -->
       <div class="images-grid">
+        {#if !searchQuery && folderEntries.length > 0}
+          {#each folderEntries as folder (folder.path)}
+            <div
+              class="folder-card"
+              onclick={() => navigateToFolder(folder.path)}
+              role="button"
+              tabindex="0"
+              onkeydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigateToFolder(folder.path);
+                }
+              }}
+            >
+              <div class="folder-thumb">
+                <Folder size={32} />
+              </div>
+              <div class="folder-info">
+                <p class="folder-name" title={folder.name}>{folder.name}</p>
+                <p class="folder-meta">{folder.count} image{folder.count === 1 ? '' : 's'}</p>
+              </div>
+            </div>
+          {/each}
+        {/if}
         {#each filteredImages as image (image.fullPath || image.path || image.filename)}
           <div
             class="image-card"
@@ -171,7 +318,7 @@
                     // Hide broken image and show placeholder
                     const img = e.target as HTMLImageElement;
                     img.style.display = 'none';
-                    const placeholder = img.nextElementSibling;
+                    const placeholder = img.nextElementSibling as HTMLElement | null;
                     if (placeholder) placeholder.style.display = 'flex';
                   }}
                 />
@@ -204,13 +351,17 @@
           </div>
         {/each}
 
-        {#if filteredImages.length === 0}
+        {#if filteredImages.length === 0 && folderEntries.length === 0}
           <div class="empty-gallery">
-            <ImageIcon size={48} class="empty-icon" />
+            <span class="empty-icon">
+              <ImageIcon size={48} />
+            </span>
             <h3>No images found</h3>
             <p>
               {#if searchQuery}
                 Try a different search term
+              {:else if currentFolder}
+                This folder is empty
               {:else if onUpload}
                 Upload an image to get started
               {:else}
@@ -357,16 +508,19 @@
     border: 1px solid #e5e5e5;
     border-radius: 0.375rem;
     font-size: 0.875rem;
+    color: #1a1a1a;
   }
 
   :global(.dark .search-input) {
     background-color: #404040;
     border-color: #525252;
+    color: #f5f5f5;
   }
 
   .search-input:focus {
     outline: none;
     border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   .controls-right {
@@ -406,6 +560,74 @@
     background-color: #2563eb;
   }
 
+  /* Folder Browser */
+  .browser-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.5rem;
+    border-bottom: 1px solid #e5e5e5;
+    background-color: #fafafa;
+  }
+
+  :global(.dark .browser-bar) {
+    border-bottom-color: #404040;
+    background-color: #2d2d2d;
+  }
+
+  .folder-up-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.375rem;
+    border: 1px solid #e5e5e5;
+    background-color: #ffffff;
+    color: #374151;
+    cursor: pointer;
+    font-size: 0.75rem;
+  }
+
+  :global(.dark .folder-up-btn) {
+    background-color: #404040;
+    border-color: #525252;
+    color: #e5e7eb;
+  }
+
+  .folder-up-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .breadcrumbs {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .breadcrumb {
+    background: none;
+    border: none;
+    color: #2563eb;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  :global(.dark .breadcrumb) {
+    color: #93c5fd;
+  }
+
+  .breadcrumb-sep {
+    color: #9ca3af;
+    font-size: 0.75rem;
+  }
+
+  :global(.dark .breadcrumb-sep) {
+    color: #6b7280;
+  }
+
   /* Images Grid */
   .images-grid {
     flex: 1;
@@ -414,6 +636,78 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 1rem;
+  }
+
+  .folder-card {
+    position: relative;
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    transition: all 0.15s ease;
+    height: 100px;
+    background-color: #ffffff;
+    display: flex;
+    flex-direction: column;
+  }
+
+  :global(.dark .folder-card) {
+    background-color: #2d2d2d;
+  }
+
+  .folder-card:hover {
+    border-color: #bfdbfe;
+  }
+
+  :global(.dark .folder-card:hover) {
+    border-color: #1e40af;
+  }
+
+  .folder-thumb {
+    flex: 1;
+    background-color: #f7f7f7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #3b82f6;
+  }
+
+  :global(.dark .folder-thumb) {
+    background-color: #404040;
+    color: #93c5fd;
+  }
+
+  .folder-info {
+    padding: 0.5rem;
+    border-top: 1px solid #e5e5e5;
+  }
+
+  :global(.dark .folder-info) {
+    border-top-color: #404040;
+  }
+
+  .folder-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :global(.dark .folder-name) {
+    color: #f5f5f5;
+  }
+
+  .folder-meta {
+    font-size: 0.714rem;
+    color: #666666;
+    margin: 0;
+  }
+
+  :global(.dark .folder-meta) {
+    color: #a3a3a3;
   }
 
   .image-card {
@@ -460,8 +754,8 @@
 
   .image-thumb img {
     height: 100%;
-    width: auto;
-    max-width: 100%;
+    width: 100%;
+    object-fit: cover;
   }
 
   .no-image {
