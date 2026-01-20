@@ -84,20 +84,23 @@
     selectedImageField ? getCustomImageAlt(selectedImageField) : post.title
   );
   let displayTags = $derived(post.frontmatter.tags?.slice(0, 3) || []);
-</script>
-
-<div
-  class="post-card"
-  class:clickable={!!onClick}
-  onclick={() => onClick?.()}
-  role={onClick ? 'button' : 'article'}
-  tabindex={onClick ? 0 : undefined}
-  onkeydown={(e) => {
-    if (onClick && (e.key === 'Enter' || e.key === ' ')) {
+  const handleCardKeydown = (e: KeyboardEvent) => {
+    if (!onClick) return;
+    if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       onClick();
     }
-  }}
+  };
+</script>
+
+<svelte:element
+  this={onClick ? 'div' : 'article'}
+  class="post-card"
+  class:clickable={!!onClick}
+  role={onClick ? 'button' : 'article'}
+  tabindex={onClick ? 0 : undefined}
+  onclick={onClick ? () => onClick?.() : undefined}
+  onkeydown={onClick ? handleCardKeydown : undefined}
 >
   <!-- Image -->
   {#if imageUrl}
@@ -133,11 +136,14 @@
 
   <!-- Actions -->
   {#if onDelete || onDuplicate}
-    <div class="post-actions" onclick={(e) => e.stopPropagation()}>
+    <div class="post-actions">
       {#if onDuplicate}
         <button
           class="action-btn"
-          onclick={onDuplicate}
+          onclick={(e) => {
+            e.stopPropagation();
+            onDuplicate?.();
+          }}
           title="Duplicate post"
           type="button"
         >
@@ -147,7 +153,10 @@
       {#if onDelete}
         <button
           class="action-btn danger"
-          onclick={onDelete}
+          onclick={(e) => {
+            e.stopPropagation();
+            onDelete?.();
+          }}
           title="Delete post"
           type="button"
         >
@@ -156,7 +165,7 @@
       {/if}
     </div>
   {/if}
-</div>
+</svelte:element>
 
 <style>
   .post-card {
@@ -263,6 +272,7 @@
     line-height: 1.5;
     margin: 0;
     display: -webkit-box;
+    line-clamp: 3;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;

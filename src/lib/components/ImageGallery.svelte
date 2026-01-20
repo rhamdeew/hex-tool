@@ -187,7 +187,11 @@
 {#if open}
   <div
     class="modal-overlay"
-    onclick={() => (open = false)}
+    onclick={(e) => {
+      if (e.currentTarget === e.target) {
+        open = false;
+      }
+    }}
     role="button"
     tabindex="0"
     aria-label="Close image gallery"
@@ -198,7 +202,7 @@
       }
     }}
   >
-    <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+    <div class="modal-content">
       <!-- Header -->
       <div class="modal-header">
         <h2 class="modal-title">Image Gallery</h2>

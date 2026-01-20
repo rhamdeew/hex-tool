@@ -218,8 +218,24 @@
 
 <!-- Command Output Modal -->
 {#if showCommandOutput && commandOutput}
-  <div class="modal-overlay" onclick={closeOutput}>
-    <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+  <div
+    class="modal-overlay"
+    onclick={(e) => {
+      if (e.currentTarget === e.target) {
+        closeOutput();
+      }
+    }}
+    role="button"
+    tabindex="0"
+    aria-label="Close command output"
+    onkeydown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        closeOutput();
+      }
+    }}
+  >
+    <div class="modal-content">
       <div class="modal-header">
         <h3>Command Output</h3>
         <button class="close-btn" onclick={closeOutput} type="button">&times;</button>

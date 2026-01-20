@@ -151,7 +151,9 @@
   <!-- Search and Filters -->
   <div class="search-bar">
     <div class="search-input-wrapper">
-      <Search size={18} class="search-icon" />
+      <span class="search-icon">
+        <Search size={18} />
+      </span>
       <input
         type="text"
         placeholder="Search posts..."
@@ -182,7 +184,7 @@
       <!-- Tag Filter -->
       {#if allTags.length > 0}
         <div class="filter-group">
-          <label class="filter-label">Filter by tag:</label>
+          <span class="filter-label">Filter by tag:</span>
           <div class="tags-list">
             <button
               class="tag-filter"
@@ -208,8 +210,8 @@
 
       <!-- Sort Options -->
       <div class="filter-group">
-        <label class="filter-label">Sort by:</label>
-        <select class="sort-select" bind:value={sortBy}>
+        <label class="filter-label" for="post-sort">Sort by:</label>
+        <select id="post-sort" class="sort-select" bind:value={sortBy}>
           <option value="modified">Last modified</option>
           <option value="date">Publish date</option>
           <option value="title">Title</option>

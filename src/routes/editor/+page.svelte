@@ -37,10 +37,10 @@
   import { open } from '@tauri-apps/plugin-dialog';
   import ImageGallery from '$lib/components/ImageGallery.svelte';
   import { backend } from '$lib/services/backend';
-  import type { Post, ImageInfo, FrontmatterConfig } from '$lib/types';
+  import type { Post, Page, Draft, ImageInfo, FrontmatterConfig } from '$lib/types';
 
   // State
-  let post = $state<Post | null>(null);
+  let post = $state<Post | Page | Draft | null>(null);
   let markdownContent = $state('');
   let originalContent = $state('');
   let hasUnsavedChanges = $state(false);
@@ -277,21 +277,21 @@
     loadError = null;
 
     try {
-      if (entryType === 'page') {
-        post = await backend.getPage(postId);
-      } else if (entryType === 'draft') {
-        post = await backend.getDraft(postId);
-      } else {
-        post = await backend.getPost(postId);
-      }
+      const loaded =
+        entryType === 'page'
+          ? await backend.getPage(postId)
+          : entryType === 'draft'
+            ? await backend.getDraft(postId)
+            : await backend.getPost(postId);
+      post = loaded;
       // Backend returns post.content as just the markdown body (no frontmatter)
       // Frontmatter is stored separately in post.frontmatter
-      markdownContent = post.content;
+      markdownContent = loaded.content;
       originalContent = markdownContent;
-      post.frontmatter.customFields = post.frontmatter.customFields || {};
+      loaded.frontmatter.customFields = loaded.frontmatter.customFields || {};
       hasUnsavedChanges = false;
       saveStatus = 'saved';
-      document.title = `${post.title} - Hex Tool`;
+      document.title = `${loaded.title} - Hex Tool`;
     } catch (error) {
       console.error('Failed to load entry:', error);
       loadError = error instanceof Error ? error.message : 'Failed to load entry';
@@ -320,11 +320,11 @@
       post.frontmatter.title = post.title;
 
       if (entryType === 'page') {
-        await backend.savePage(post);
+        await backend.savePage(post as Page);
       } else if (entryType === 'draft') {
-        await backend.saveDraft(post);
+        await backend.saveDraft(post as Draft);
       } else {
-        await backend.savePost(post);
+        await backend.savePost(post as Post);
       }
 
       originalContent = markdownContent;
@@ -828,7 +828,7 @@
 
             <!-- Tags -->
             <div class="field-group">
-              <label>Tags</label>
+              <span>Tags</span>
               <div class="chips-list">
                 {#each post.frontmatter.tags || [] as tag, index}
                   <span class="chip tag-chip">
@@ -854,7 +854,7 @@
 
             <!-- Categories -->
             <div class="field-group">
-              <label>Categories</label>
+              <span>Categories</span>
               <div class="chips-list">
                 {#each post.frontmatter.categories || [] as category, index}
                   <span class="chip category-chip">
@@ -910,6 +910,7 @@
                   type="checkbox"
                   checked={post.frontmatter.comments ?? false}
                   onchange={(e) => {
+                    if (!post) return;
                     const target = e.target as HTMLInputElement;
                     post.frontmatter.comments = target.checked;
                     handleFrontmatterChange();
@@ -925,7 +926,16 @@
                   <div class="custom-field-group">
                     <div
                       class="custom-field-group-header"
+                      role="button"
+                      tabindex="0"
+                      aria-expanded={!(customGroupCollapsed[group.name] ?? group.collapsed)}
                       onclick={() => toggleCustomGroup(group.name)}
+                      onkeydown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggleCustomGroup(group.name);
+                        }
+                      }}
                     >
                       <span>{group.label}</span>
                       <button class="group-toggle" type="button">
@@ -1096,9 +1106,15 @@
 
         <!-- Resize Handle -->
         {#if showPreview}
-          <div class="resize-handle" onmousedown={startResize} class:resizing={isResizing}>
+          <button
+            class="resize-handle"
+            onmousedown={startResize}
+            class:resizing={isResizing}
+            type="button"
+            aria-label="Resize panels"
+          >
             <GripVertical size={16} />
-          </div>
+          </button>
         {/if}
 
         <!-- Preview Pane -->
@@ -1770,11 +1786,6 @@
     max-height: 120px;
   }
 
-  .alt-input {
-    margin-top: 0.375rem;
-    font-size: 0.8125rem !important;
-  }
-
   /* Editor Panels */
   .editor-panels {
     flex: 1;
@@ -1785,10 +1796,6 @@
 
   :global(.dark .editor-panels) {
     background-color: #2d2d2d;
-  }
-
-  .editor-panels.full-width {
-    /* No change needed */
   }
 
   .editor-pane,
@@ -1863,6 +1870,8 @@
     color: #a3a3a3;
     transition: all 0.15s ease;
     flex-shrink: 0;
+    border: none;
+    padding: 0;
   }
 
   :global(.dark .resize-handle) {

@@ -28,15 +28,14 @@
     activeTab === 'drafts' ? 'Draft' :
     'Post'
   );
-  let previewImageWarning = $derived(
-    frontmatterConfig?.previewImageField
-      ? frontmatterConfig.customFields?.some(
-          (field) => field.name === frontmatterConfig.previewImageField
-        )
-        ? ''
-        : `Preview image field "${frontmatterConfig.previewImageField}" not found in customFields.`
-      : ''
-  );
+  function getPreviewImageWarning(config: FrontmatterConfig | null) {
+    if (!config?.previewImageField) return '';
+    return config.customFields.some((field) => field.name === config.previewImageField)
+      ? ''
+      : `Preview image field "${config.previewImageField}" not found in customFields.`;
+  }
+
+  let previewImageWarning = $derived(getPreviewImageWarning(frontmatterConfig));
 
   // Get current items based on active tab
   let currentItems = $derived(
@@ -414,9 +413,25 @@
   />
 
   <!-- New Post Modal -->
-  {#if showCreateDialog}
-    <div class="modal-overlay" onclick={closeCreateDialog}>
-      <div class="modal-content" onclick={(e) => e.stopPropagation()}>
+{#if showCreateDialog}
+  <div
+    class="modal-overlay"
+    onclick={(e) => {
+      if (e.currentTarget === e.target) {
+        closeCreateDialog();
+      }
+    }}
+    role="button"
+    tabindex="0"
+    aria-label="Close create dialog"
+    onkeydown={(e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        closeCreateDialog();
+      }
+    }}
+  >
+    <div class="modal-content">
         <div class="modal-header">
           <h3>Create {createKind}</h3>
           <button class="close-btn" onclick={closeCreateDialog} type="button" aria-label="Close">

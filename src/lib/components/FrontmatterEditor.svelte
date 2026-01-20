@@ -64,16 +64,21 @@
 </script>
 
 <div class="frontmatter-editor">
-  <div class="editor-header" onclick={() => (isOpen = !isOpen)}>
+  <button
+    class="editor-header"
+    type="button"
+    onclick={() => (isOpen = !isOpen)}
+    aria-expanded={isOpen}
+  >
     <h2 class="editor-title">Frontmatter</h2>
-    <button class="toggle-btn" type="button">
+    <span class="toggle-btn" aria-hidden="true">
       {#if isOpen}
         <ChevronUp size={20} />
       {:else}
         <ChevronDown size={20} />
       {/if}
-    </button>
-  </div>
+    </span>
+  </button>
 
   {#if isOpen}
     <div class="editor-content">
@@ -127,7 +132,7 @@
 
       <!-- Tags -->
       <div class="field-group">
-        <label class="field-label">Tags</label>
+        <span class="field-label">Tags</span>
         <div class="tags-input-group">
           <div class="tags-list">
             {#each (frontmatter.tags || []) as tag, index (index)}
@@ -166,7 +171,7 @@
 
       <!-- Categories -->
       <div class="field-group">
-        <label class="field-label">Categories</label>
+        <span class="field-label">Categories</span>
         <div class="categories-input-group">
           <div class="categories-list">
             {#each (frontmatter.categories || []) as category, index (index)}
@@ -230,7 +235,7 @@
 
       <!-- Comments -->
       <div class="field-group">
-        <label class="field-label">Comments</label>
+        <span class="field-label">Comments</span>
         <label class="checkbox-label">
           <input type="checkbox" bind:checked={frontmatter.comments} />
           <span>Allow comments</span>
@@ -239,7 +244,7 @@
 
       <!-- Custom Fields -->
       <div class="field-group">
-        <label class="field-label">Custom Fields</label>
+        <span class="field-label">Custom Fields</span>
         <div class="custom-fields-list">
           {#each Object.entries(frontmatter.customFields || {}) as [key, value]}
             <div class="custom-field-row">
@@ -303,6 +308,12 @@
     justify-content: space-between;
     padding: 1rem;
     border-bottom: 1px solid #e5e5e5;
+    width: 100%;
+    text-align: left;
+    background-color: transparent;
+    border-left: none;
+    border-right: none;
+    border-top: none;
     cursor: pointer;
     user-select: none;
   }
@@ -515,52 +526,6 @@
 
   .add-btn:hover {
     background-color: #2563eb;
-  }
-
-  /* Images */
-  .image-field-group {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .image-select-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.625rem;
-    background-color: #f7f7f7;
-    border: 1px solid #e5e5e5;
-    border-radius: 0.375rem;
-    color: #666666;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
-  :global(.dark .image-select-btn) {
-    background-color: #404040;
-    border-color: #525252;
-    color: #a3a3a3;
-  }
-
-  .image-select-btn:hover {
-    background-color: #e5e5e5;
-  }
-
-  :global(.dark .image-select-btn:hover) {
-    background-color: #525252;
-  }
-
-  .image-preview {
-    margin-top: 0.5rem;
-    border-radius: 0.375rem;
-    overflow: hidden;
-    max-width: 300px;
-  }
-
-  .image-preview img {
-    width: 100%;
-    height: auto;
-    display: block;
   }
 
   /* Custom Fields */
