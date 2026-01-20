@@ -34,7 +34,7 @@
     GripVertical
   } from 'lucide-svelte';
   import { convertFileSrc } from '@tauri-apps/api/core';
-  import { open } from '@tauri-apps/plugin-dialog';
+  import { confirm, open } from '@tauri-apps/plugin-dialog';
   import ImageGallery from '$lib/components/ImageGallery.svelte';
   import { backend } from '$lib/services/backend';
   import type { Post, Page, Draft, ImageInfo, FrontmatterConfig } from '$lib/types';
@@ -209,12 +209,26 @@
   let customFieldGroups = $derived(buildCustomFieldGroups(frontmatterConfig));
 
   // Navigation guard
+  let allowNavigation = false;
+  let confirmNavigationInFlight = false;
   beforeNavigate((navigation) => {
-    if (hasUnsavedChanges) {
-      if (!confirm('You have unsaved changes. Are you sure you want to leave?')) {
-        navigation.cancel();
-      }
+    if (!hasUnsavedChanges || allowNavigation) {
+      allowNavigation = false;
+      return;
     }
+
+    navigation.cancel();
+    if (confirmNavigationInFlight) return;
+
+    const targetUrl = navigation.to?.url;
+    confirmNavigationInFlight = true;
+    void (async () => {
+      const confirmed = await confirm('You have unsaved changes. Are you sure you want to leave?');
+      confirmNavigationInFlight = false;
+      if (!confirmed || !targetUrl) return;
+      allowNavigation = true;
+      await goto(`${targetUrl.pathname}${targetUrl.search}${targetUrl.hash}`);
+    })();
   });
 
   onMount(async () => {
