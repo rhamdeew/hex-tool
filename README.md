@@ -2,7 +2,7 @@
 
 Hex Tool is a desktop GUI editor for Hexo blogs built with Tauri, SvelteKit, and TypeScript. It provides a fast, native-feeling workflow for editing posts and managing content while keeping the project structure on disk.
 
-![Hex Tool screenshot](https://github.com/user-attachments/assets/5ab82e89-0988-41e4-9e79-8bef137bf529)
+![Hex Tool screenshot](https://github.com/user-attachments/assets/1ca89750-5421-4e50-b1c0-ccf6ec3f36f4)
 
 ## Usage
 
@@ -10,6 +10,18 @@ Hex Tool is a desktop GUI editor for Hexo blogs built with Tauri, SvelteKit, and
 2. Launch the app and select your Hexo project folder (the one with `package.json` and `source/`).
 3. Manage posts, pages, and drafts, then edit content with live frontmatter controls.
 4. Use the Hexo controls to run `hexo server`, `hexo generate`, `hexo clean`, and `hexo deploy` from the UI.
+
+### Fixing macOS Gatekeeper Issue
+
+If macOS prevents you from opening the app with a message like **"Hex Tool" cannot be opened because the developer cannot be verified**, you need to remove the quarantine attribute that macOS applies to downloaded applications.
+
+Run this command in Terminal:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Hex Tool.app"
+```
+
+This removes the quarantine flag and allows the app to run. You only need to do this once after installing Hex Tool.
 
 ### Requirements for Hexo Commands
 
