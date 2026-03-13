@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { Server, Play, Square, Globe, Package, Trash2, Upload } from 'lucide-svelte';
+  import { Play, Square, Globe, Package, Trash2, Upload } from 'lucide-svelte';
   import { openUrl } from '@tauri-apps/plugin-opener';
   import { confirm, message } from '@tauri-apps/plugin-dialog';
   import { backend } from '$lib/services/backend';
@@ -94,7 +94,7 @@
     }
   }
 
-  async function runCommand(command: string, commandName: string) {
+  async function runCommand(command: string, _commandName: string) {
     if (loading) return;
 
     const confirmed = await confirm(`Run "hexo ${command}"?`, {

@@ -27,8 +27,6 @@
     Loader2,
     ChevronDown,
     ChevronUp,
-    ChevronLeft,
-    ChevronRight,
     Plus,
     X,
     GripVertical
@@ -841,7 +839,7 @@
             <div class="field-group">
               <span>Tags</span>
               <div class="chips-list">
-                {#each post.frontmatter.tags || [] as tag, index}
+                {#each post.frontmatter.tags || [] as tag, index (tag)}
                   <span class="chip tag-chip">
                     #{tag}
                     <button onclick={() => removeTag(index)} type="button" class="chip-remove">
@@ -867,7 +865,7 @@
             <div class="field-group">
               <span>Categories</span>
               <div class="chips-list">
-                {#each post.frontmatter.categories || [] as category, index}
+                {#each post.frontmatter.categories || [] as category, index (category)}
                   <span class="chip category-chip">
                     {category}
                     <button onclick={() => removeCategory(index)} type="button" class="chip-remove">

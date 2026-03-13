@@ -536,7 +536,7 @@ pub fn copy_image_to_project(
 
     let target_dir = match subfolder.as_deref().filter(|s| !s.is_empty()) {
         Some(sub) => images_dir.join(sub),
-        None => images_dir,
+        None => images_dir.clone(),
     };
 
     // Create target directory if it doesn't exist
@@ -568,14 +568,14 @@ pub fn copy_image_to_project(
     fs::copy(source, &final_dest)
         .map_err(|e| format!("Failed to copy image: {}", e))?;
 
-    // Return URL path for markdown
+    // Return URL path for markdown (matches the format used by list_images: /images/...)
     let relative_path = final_dest
-        .strip_prefix(&project_path)
+        .strip_prefix(&images_dir)
         .ok()
         .and_then(|p| p.to_str())
         .ok_or("Failed to get relative path")?;
 
-    Ok(format!("/{}", relative_path.replace('\\', "/")))
+    Ok(format!("/images/{}", relative_path.replace('\\', "/")))
 }
 
 fn sanitize_image_filename(filename: &str) -> String {
@@ -899,7 +899,7 @@ mod tests {
 
         let url = result.unwrap();
         assert!(url.starts_with('/'));
-        assert!(url.contains("source/images/photo.png"), "unexpected url: {}", url);
+        assert_eq!(url, "/images/photo.png", "unexpected url: {}", url);
 
         let dest = tmp.path().join("source/images/photo.png");
         assert!(dest.exists(), "file should exist at root images dir");
@@ -919,11 +919,7 @@ mod tests {
         assert!(result.is_ok(), "expected Ok, got {:?}", result);
 
         let url = result.unwrap();
-        assert!(
-            url.contains("source/images/2024/travel/shot.jpg"),
-            "unexpected url: {}",
-            url
-        );
+        assert_eq!(url, "/images/2024/travel/shot.jpg", "unexpected url: {}", url);
 
         let dest = tmp.path().join("source/images/2024/travel/shot.jpg");
         assert!(dest.exists(), "file should exist in subfolder");
@@ -960,7 +956,6 @@ mod tests {
     fn copy_image_duplicate_gets_timestamp_suffix() {
         let tmp = TempDir::new().unwrap();
         let project_path = setup_project(&tmp);
-        let _source1 = create_source_image(&tmp, "dup.png");
         // Pre-create a file at the destination to simulate duplicate
         let dest_dir = tmp.path().join("source/images/sub");
         fs::create_dir_all(&dest_dir).unwrap();
@@ -980,6 +975,6 @@ mod tests {
         assert_eq!(entries.len(), 2, "expected 2 files in sub, got {}", entries.len());
         // The copy url should still be under sub/
         let url = result.unwrap();
-        assert!(url.contains("source/images/sub/"), "duplicate url should still be in subfolder: {}", url);
+        assert!(url.starts_with("/images/sub/"), "duplicate url should still be in subfolder: {}", url);
     }
 }

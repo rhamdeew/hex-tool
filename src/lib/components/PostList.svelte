@@ -194,7 +194,7 @@
             >
               All
             </button>
-            {#each allTags as tag}
+            {#each allTags as tag (tag)}
               <button
                 class="tag-filter"
                 class:active={filterTag === tag}

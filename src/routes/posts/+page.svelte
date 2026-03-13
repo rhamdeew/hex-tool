@@ -234,9 +234,9 @@
 
       try {
         // In Tauri, file.path should be available
-        // @ts-ignore - Tauri-specific property
+        // @ts-expect-error - Tauri-specific property
         const sourcePath = file.path || file.name;
-        const imageUrl = await backend.copyImageToProject(sourcePath, folder);
+        await backend.copyImageToProject(sourcePath, folder);
 
         // Reload images
         images = await backend.listImages();
@@ -247,11 +247,6 @@
     };
 
     input.click();
-  }
-
-  function openImageGalleryForPost(fieldName: string, post: Post) {
-    pendingImageField = { fieldName, post };
-    showImageGallery = true;
   }
 
   async function handleGenerateFrontmatterConfig() {
