@@ -516,7 +516,7 @@
     pendingImageField = null;
   }
 
-  async function handleImageUpload() {
+  async function handleImageUpload(folder: string = '') {
     try {
       // Use Tauri's native file dialog
       const selected = await open({
@@ -532,7 +532,7 @@
       const sourcePath = typeof selected === 'string' ? selected : selected[0];
       if (!sourcePath) return;
 
-      const imageUrl = await backend.copyImageToProject(sourcePath);
+      const imageUrl = await backend.copyImageToProject(sourcePath, folder);
       images = await backend.listImages();
 
       // Find the newly uploaded image and select it

@@ -222,7 +222,7 @@
     });
   }
 
-  function handleUploadImage() {
+  function handleUploadImage(folder: string = '') {
     // Trigger file upload dialog
     const input = document.createElement('input');
     input.type = 'file';
@@ -236,7 +236,7 @@
         // In Tauri, file.path should be available
         // @ts-ignore - Tauri-specific property
         const sourcePath = file.path || file.name;
-        const imageUrl = await backend.copyImageToProject(sourcePath);
+        const imageUrl = await backend.copyImageToProject(sourcePath, folder);
 
         // Reload images
         images = await backend.listImages();

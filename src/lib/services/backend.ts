@@ -159,9 +159,9 @@ export class BackendService {
     return invoke<ImageInfo[]>('list_images', { projectPath });
   }
 
-  async copyImageToProject(sourcePath: string): Promise<string> {
+  async copyImageToProject(sourcePath: string, subfolder: string = ''): Promise<string> {
     const projectPath = this.ensureProject();
-    return invoke<string>('copy_image_to_project', { projectPath, sourcePath });
+    return invoke<string>('copy_image_to_project', { projectPath, sourcePath, subfolder });
   }
 
   async deleteImage(imagePath: string): Promise<void> {

@@ -529,12 +529,18 @@ pub fn list_images(project_path: String) -> Result<Vec<ImageInfo>, String> {
 pub fn copy_image_to_project(
     project_path: String,
     source_path: String,
+    subfolder: Option<String>,
 ) -> Result<String, String> {
     let project = HexoProject::new(PathBuf::from(&project_path));
     let images_dir = project.get_images_dir();
 
-    // Create images directory if it doesn't exist
-    fs::create_dir_all(&images_dir)
+    let target_dir = match subfolder.as_deref().filter(|s| !s.is_empty()) {
+        Some(sub) => images_dir.join(sub),
+        None => images_dir,
+    };
+
+    // Create target directory if it doesn't exist
+    fs::create_dir_all(&target_dir)
         .map_err(|e| format!("Failed to create images directory: {}", e))?;
 
     let source = Path::new(&source_path);
@@ -544,7 +550,7 @@ pub fn copy_image_to_project(
         .ok_or("Invalid source filename")?;
     let sanitized_filename = sanitize_image_filename(filename);
 
-    let dest_path = images_dir.join(&sanitized_filename);
+    let dest_path = target_dir.join(&sanitized_filename);
 
     // Handle duplicate filenames
     let final_dest = if dest_path.exists() {
@@ -554,7 +560,7 @@ pub fn copy_image_to_project(
             .and_then(|s| s.to_str())
             .unwrap_or("file");
         let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
-        images_dir.join(format!("{}_{}.{}", stem, timestamp, ext))
+        target_dir.join(format!("{}_{}.{}", stem, timestamp, ext))
     } else {
         dest_path
     };
@@ -862,4 +868,118 @@ pub fn stop_hexo_server(server_id: String) -> Result<(), String> {
 pub fn is_hexo_server_running(project_path: String) -> Result<bool, String> {
     let project = HexoProject::new(PathBuf::from(&project_path));
     Ok(project.is_server_running())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn setup_project(tmp: &TempDir) -> String {
+        let project_path = tmp.path().to_str().unwrap().to_string();
+        fs::create_dir_all(format!("{}/source/images", project_path)).unwrap();
+        project_path
+    }
+
+    fn create_source_image(tmp: &TempDir, name: &str) -> String {
+        let path = tmp.path().join(name);
+        fs::write(&path, b"fake image data").unwrap();
+        path.to_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn copy_image_to_root() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = setup_project(&tmp);
+        let source = create_source_image(&tmp, "photo.png");
+
+        let result = copy_image_to_project(project_path.clone(), source, None);
+        assert!(result.is_ok(), "expected Ok, got {:?}", result);
+
+        let url = result.unwrap();
+        assert!(url.starts_with('/'));
+        assert!(url.contains("source/images/photo.png"), "unexpected url: {}", url);
+
+        let dest = tmp.path().join("source/images/photo.png");
+        assert!(dest.exists(), "file should exist at root images dir");
+    }
+
+    #[test]
+    fn copy_image_to_subfolder() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = setup_project(&tmp);
+        let source = create_source_image(&tmp, "shot.jpg");
+
+        let result = copy_image_to_project(
+            project_path.clone(),
+            source,
+            Some("2024/travel".to_string()),
+        );
+        assert!(result.is_ok(), "expected Ok, got {:?}", result);
+
+        let url = result.unwrap();
+        assert!(
+            url.contains("source/images/2024/travel/shot.jpg"),
+            "unexpected url: {}",
+            url
+        );
+
+        let dest = tmp.path().join("source/images/2024/travel/shot.jpg");
+        assert!(dest.exists(), "file should exist in subfolder");
+    }
+
+    #[test]
+    fn copy_image_empty_subfolder_goes_to_root() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = setup_project(&tmp);
+        let source = create_source_image(&tmp, "img.gif");
+
+        let result = copy_image_to_project(project_path.clone(), source, Some("".to_string()));
+        assert!(result.is_ok());
+
+        let dest = tmp.path().join("source/images/img.gif");
+        assert!(dest.exists(), "empty subfolder should fall back to root images dir");
+    }
+
+    #[test]
+    fn copy_image_creates_missing_subfolder() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = setup_project(&tmp);
+        let source = create_source_image(&tmp, "new.png");
+
+        let subfolder = "does/not/exist/yet".to_string();
+        let result = copy_image_to_project(project_path.clone(), source, Some(subfolder));
+        assert!(result.is_ok());
+
+        let dest = tmp.path().join("source/images/does/not/exist/yet/new.png");
+        assert!(dest.exists(), "nested subfolder should be created automatically");
+    }
+
+    #[test]
+    fn copy_image_duplicate_gets_timestamp_suffix() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = setup_project(&tmp);
+        let _source1 = create_source_image(&tmp, "dup.png");
+        // Pre-create a file at the destination to simulate duplicate
+        let dest_dir = tmp.path().join("source/images/sub");
+        fs::create_dir_all(&dest_dir).unwrap();
+        fs::write(dest_dir.join("dup.png"), b"existing").unwrap();
+
+        let source2 = create_source_image(&tmp, "dup.png");
+        let result =
+            copy_image_to_project(project_path.clone(), source2, Some("sub".to_string()));
+        assert!(result.is_ok());
+
+        // The renamed file should be in the same subfolder
+        let entries: Vec<_> = fs::read_dir(&dest_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .collect();
+        // original + timestamped copy
+        assert_eq!(entries.len(), 2, "expected 2 files in sub, got {}", entries.len());
+        // The copy url should still be under sub/
+        let url = result.unwrap();
+        assert!(url.contains("source/images/sub/"), "duplicate url should still be in subfolder: {}", url);
+    }
 }

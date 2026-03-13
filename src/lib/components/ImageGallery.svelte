@@ -21,7 +21,7 @@
     images: ImageInfo[];
     onSelect?: (image: ImageInfo) => void;
     onDelete?: (image: ImageInfo) => void;
-    onUpload?: () => void;
+    onUpload?: (folder: string) => void;
   }
 
   let {
@@ -238,7 +238,7 @@
           </select>
 
           {#if onUpload}
-            <button class="upload-btn" onclick={onUpload} type="button">
+            <button class="upload-btn" onclick={() => onUpload?.(currentFolder)} type="button">
               <UploadIcon size={18} />
               <span>Upload</span>
             </button>
@@ -373,7 +373,7 @@
               {/if}
             </p>
             {#if onUpload && !searchQuery}
-              <button class="upload-btn-empty" onclick={onUpload} type="button">
+              <button class="upload-btn-empty" onclick={() => onUpload?.(currentFolder)} type="button">
                 <UploadIcon size={18} />
                 Upload Image
               </button>
