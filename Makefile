@@ -106,16 +106,17 @@ bump-patch-version: ## Bump patch version, tag commit, and push to origin
 	NEW_PATCH=$$((PATCH + 1)); \
 	NEW_VERSION="$$MAJOR.$$MINOR.$$NEW_PATCH"; \
 	echo "Current version: $$CURRENT → New version: $$NEW_VERSION"; \
-	printf "Update version in package.json, tauri.conf.json? [Y/n] "; read ANS; \
+	printf "Update version in package.json, tauri.conf.json, Cargo.toml? [Y/n] "; read ANS; \
 	[ "$${ANS:-Y}" = "Y" ] || [ "$${ANS:-Y}" = "y" ] || { echo "Aborted."; exit 1; }; \
 	node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json')); p.version='$$NEW_VERSION'; fs.writeFileSync('package.json', JSON.stringify(p, null, 2)+'\n')"; \
 	node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json')); p.version='$$NEW_VERSION'; fs.writeFileSync('src-tauri/tauri.conf.json', JSON.stringify(p, null, 2)+'\n')"; \
+	sed -i '' "s/^version = \".*\"/version = \"$$NEW_VERSION\"/" src-tauri/Cargo.toml; \
 	echo "Files updated."; \
 	printf "Commit message [Bump version to $$NEW_VERSION]: "; read MSG; \
 	MSG="$${MSG:-Bump version to $$NEW_VERSION}"; \
 	printf "Commit as \"$$MSG\" and tag as v$$NEW_VERSION? [Y/n] "; read ANS; \
 	[ "$${ANS:-Y}" = "Y" ] || [ "$${ANS:-Y}" = "y" ] || { echo "Aborted."; exit 1; }; \
-	git add package.json src-tauri/tauri.conf.json; \
+	git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml; \
 	git commit -m "$$MSG"; \
 	git tag "v$$NEW_VERSION"; \
 	echo "Committed and tagged v$$NEW_VERSION."; \
