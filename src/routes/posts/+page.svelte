@@ -420,7 +420,7 @@
     tabindex="0"
     aria-label="Close create dialog"
     onkeydown={(e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
+      if (e.currentTarget === e.target && (e.key === 'Enter' || e.key === ' ')) {
         e.preventDefault();
         closeCreateDialog();
       }

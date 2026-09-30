@@ -229,7 +229,7 @@
     tabindex="0"
     aria-label="Close command output"
     onkeydown={(e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
+      if (e.currentTarget === e.target && (e.key === 'Enter' || e.key === ' ')) {
         e.preventDefault();
         closeOutput();
       }
