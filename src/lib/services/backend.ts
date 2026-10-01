@@ -6,6 +6,7 @@ import type {
   Draft,
   ImageInfo,
   HexoConfig,
+  Frontmatter,
   FrontmatterConfig,
   AppConfig,
   CommandOutput
@@ -71,6 +72,14 @@ export class BackendService {
   async saveFrontmatterConfigRaw(content: string): Promise<FrontmatterConfig> {
     const projectPath = this.ensureProject();
     return invoke<FrontmatterConfig>('save_frontmatter_config_raw', { projectPath, content });
+  }
+
+  async serializeFrontmatter(frontmatter: Frontmatter): Promise<string> {
+    return invoke<string>('serialize_frontmatter', { frontmatter });
+  }
+
+  async parseFrontmatter(yaml: string): Promise<Frontmatter> {
+    return invoke<Frontmatter>('parse_frontmatter', { yaml });
   }
 
   // ====================

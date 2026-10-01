@@ -21,6 +21,8 @@ pub fn run() {
             generate_frontmatter_config_command,
             get_frontmatter_config_raw,
             save_frontmatter_config_raw,
+            serialize_frontmatter,
+            parse_frontmatter,
             list_posts,
             get_post,
             save_post,

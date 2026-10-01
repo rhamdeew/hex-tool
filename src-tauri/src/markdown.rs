@@ -82,6 +82,12 @@ pub fn frontmatter_to_yaml(frontmatter: &Frontmatter) -> Result<String, String> 
         .map_err(|e| format!("Failed to serialize frontmatter: {}", e))
 }
 
+pub fn frontmatter_from_yaml(yaml: &str) -> Result<Frontmatter, String> {
+    serde_yaml::from_str::<FrontmatterYaml>(yaml)
+        .map(Frontmatter::from)
+        .map_err(|e| format!("Invalid frontmatter: {}", e))
+}
+
 #[derive(Debug)]
 pub struct MarkdownDocument {
     pub frontmatter: Frontmatter,
@@ -302,6 +308,20 @@ impl Post {
 #[cfg(test)]
 mod tests {
     use super::MarkdownDocument;
+
+    #[test]
+    fn frontmatter_yaml_roundtrip() {
+        let yaml = "title: Hello\ndate: 2024-01-01 10:00:00\ntags:\n- a\ncover: /images/x.png\n";
+        let frontmatter = super::frontmatter_from_yaml(yaml).expect("parse failed");
+        assert_eq!(frontmatter.title, "Hello");
+        assert_eq!(frontmatter.tags, vec!["a"]);
+        assert!(frontmatter.custom_fields.contains_key("cover"));
+
+        let serialized = super::frontmatter_to_yaml(&frontmatter).expect("serialize failed");
+        let reparsed = super::frontmatter_from_yaml(&serialized).expect("reparse failed");
+        assert_eq!(reparsed.date, "2024-01-01 10:00:00");
+        assert!(super::frontmatter_from_yaml("tags: [").is_err());
+    }
 
     #[test]
     fn parse_standard_frontmatter() {

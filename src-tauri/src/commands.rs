@@ -1,7 +1,9 @@
 // Tauri commands for frontend-backend communication
 
 use crate::hexo::HexoProject;
-use crate::markdown::{Draft, ImageInfo, Page, Post};
+use crate::markdown::{
+    frontmatter_from_yaml, frontmatter_to_yaml, Draft, Frontmatter, ImageInfo, Page, Post,
+};
 use crate::frontmatter_config::{
     generate_frontmatter_config, load_frontmatter_config, FrontmatterConfig,
 };
@@ -120,6 +122,18 @@ pub fn get_frontmatter_config_raw(project_path: String) -> Result<Option<String>
     fs::read_to_string(&config_path)
         .map(Some)
         .map_err(|e| format!("Failed to read frontmatter config: {}", e))
+}
+
+// Serializes post frontmatter to the YAML written into the file
+#[command]
+pub fn serialize_frontmatter(frontmatter: Frontmatter) -> Result<String, String> {
+    frontmatter_to_yaml(&frontmatter)
+}
+
+// Parses raw frontmatter YAML edited by the user
+#[command]
+pub fn parse_frontmatter(yaml: String) -> Result<Frontmatter, String> {
+    frontmatter_from_yaml(&yaml)
 }
 
 // Validates raw JSON against the config schema, then writes it as-is
