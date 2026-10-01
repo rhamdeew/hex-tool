@@ -63,6 +63,16 @@ export class BackendService {
     return invoke<FrontmatterConfig>('generate_frontmatter_config_command', { projectPath });
   }
 
+  async getFrontmatterConfigRaw(): Promise<string | null> {
+    const projectPath = this.ensureProject();
+    return invoke<string | null>('get_frontmatter_config_raw', { projectPath });
+  }
+
+  async saveFrontmatterConfigRaw(content: string): Promise<FrontmatterConfig> {
+    const projectPath = this.ensureProject();
+    return invoke<FrontmatterConfig>('save_frontmatter_config_raw', { projectPath, content });
+  }
+
   // ====================
   // Posts Commands
   // ====================

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Plus, FolderOpen, X, ArrowLeft } from 'lucide-svelte';
+  import { Plus, FolderOpen, X, ArrowLeft, FileCog } from 'lucide-svelte';
   import { confirm, message } from '@tauri-apps/plugin-dialog';
   import { backend } from '$lib/services/backend';
-  import { PostList, ImageGallery, HexoControls } from '$lib/components';
+  import { PostList, ImageGallery, HexoControls, FrontmatterConfigEditor } from '$lib/components';
   import type { Post, Page, Draft, ImageInfo, FrontmatterConfig } from '$lib/types';
   import { goto } from '$app/navigation';
 
@@ -16,6 +16,7 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let showImageGallery = $state(false);
+  let showConfigEditor = $state(false);
   let showCreateDialog = $state(false);
   let newPostTitle = $state('');
   let createError = $state<string | null>(null);
@@ -290,6 +291,15 @@
           <span>Select Project</span>
         </button>
       {:else}
+        <button
+          class="back-start-btn"
+          onclick={() => (showConfigEditor = true)}
+          type="button"
+          title="Edit .hex-tool/frontmatter-config.json"
+        >
+          <FileCog size={18} />
+          <span>Frontmatter Config</span>
+        </button>
         <button class="create-btn" onclick={handleCreatePost} type="button">
           <Plus size={18} />
           <span>New Post</span>
@@ -408,6 +418,13 @@
     onSelect={handleImageSelect}
     onDelete={handleImageDelete}
     onUpload={handleUploadImage}
+  />
+
+  <FrontmatterConfigEditor
+    bind:open={showConfigEditor}
+    onSaved={(config) => {
+      frontmatterConfig = config;
+    }}
   />
 
   <!-- New Post Modal -->

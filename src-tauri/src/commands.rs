@@ -104,6 +104,45 @@ pub fn generate_frontmatter_config_command(project_path: String) -> Result<Front
     Ok(config)
 }
 
+fn frontmatter_config_path(project_path: &str) -> PathBuf {
+    Path::new(project_path)
+        .join(".hex-tool")
+        .join("frontmatter-config.json")
+}
+
+// Returns the raw JSON of frontmatter-config.json, or None if it does not exist
+#[command]
+pub fn get_frontmatter_config_raw(project_path: String) -> Result<Option<String>, String> {
+    let config_path = frontmatter_config_path(&project_path);
+    if !config_path.exists() {
+        return Ok(None);
+    }
+    fs::read_to_string(&config_path)
+        .map(Some)
+        .map_err(|e| format!("Failed to read frontmatter config: {}", e))
+}
+
+// Validates raw JSON against the config schema, then writes it as-is
+#[command]
+pub fn save_frontmatter_config_raw(
+    project_path: String,
+    content: String,
+) -> Result<FrontmatterConfig, String> {
+    let mut config: FrontmatterConfig = serde_json::from_str(&content)
+        .map_err(|e| format!("Invalid frontmatter config: {}", e))?;
+    config.is_default = false;
+
+    let config_path = frontmatter_config_path(&project_path);
+    if let Some(parent) = config_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create .hex-tool directory: {}", e))?;
+    }
+    fs::write(&config_path, content)
+        .map_err(|e| format!("Failed to write frontmatter config: {}", e))?;
+
+    Ok(config)
+}
+
 // ====================
 // Posts Commands
 // ====================
@@ -1169,5 +1208,37 @@ mod tests {
         assert!(delete_image_folder(project_path.clone(), "../..".into(), true).is_err());
         assert!(delete_image_folder(project_path.clone(), "".into(), true).is_err());
         assert!(rename_image_folder(project_path.clone(), "../images".into(), "x".into()).is_err());
+    }
+
+    #[test]
+    fn test_frontmatter_config_raw_roundtrip() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = setup_project(&tmp);
+
+        assert_eq!(get_frontmatter_config_raw(project_path.clone()).unwrap(), None);
+
+        let raw = r#"{
+  "version": "1.0",
+  "previewImageField": "cover",
+  "customFields": [{ "name": "cover", "label": "Cover", "type": "image" }]
+}"#;
+        let config = save_frontmatter_config_raw(project_path.clone(), raw.into()).unwrap();
+        assert!(!config.is_default);
+        assert_eq!(config.custom_fields.len(), 1);
+        assert_eq!(
+            get_frontmatter_config_raw(project_path.clone()).unwrap().as_deref(),
+            Some(raw)
+        );
+    }
+
+    #[test]
+    fn test_save_frontmatter_config_raw_rejects_invalid() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = setup_project(&tmp);
+
+        assert!(save_frontmatter_config_raw(project_path.clone(), "{ not json".into()).is_err());
+        // Valid JSON but missing required "version"
+        assert!(save_frontmatter_config_raw(project_path.clone(), "{}".into()).is_err());
+        assert_eq!(get_frontmatter_config_raw(project_path).unwrap(), None);
     }
 }
