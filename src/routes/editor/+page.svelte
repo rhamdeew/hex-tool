@@ -16,6 +16,7 @@
     ListOrdered,
     Quote,
     Minus,
+    ScissorsLineDashed,
     Heading1,
     Heading2,
     Heading3,
@@ -442,6 +443,10 @@
         insertion = '\n---\n';
         cursorOffset = insertion.length;
         break;
+      case 'more':
+        insertion = '\n<!-- more -->\n';
+        cursorOffset = insertion.length;
+        break;
     }
 
     const before = markdownContent.substring(0, start);
@@ -590,6 +595,12 @@
       });
       let html = marked.parse(md) as string;
 
+      // Show Hexo's excerpt marker as a visible divider
+      html = html.replace(
+        /<!--\s*more\s*-->/g,
+        '<div class="more-marker"><span>more</span></div>'
+      );
+
       // Convert project-relative image URLs to Tauri asset URLs
       const projectPath = backend.getProjectPath();
       if (projectPath) {
@@ -699,6 +710,9 @@
           </button>
           <button onclick={() => insertFormatting('hr')} class="toolbar-btn" title="Horizontal Rule" type="button">
             <Minus size={18} />
+          </button>
+          <button onclick={() => insertFormatting('more')} class="toolbar-btn" title="Read More (<!-- more -->)" type="button">
+            <ScissorsLineDashed size={18} />
           </button>
         </div>
 
@@ -2012,5 +2026,28 @@
 
   :global(.dark .markdown-preview hr) {
     border-top-color: #404040;
+  }
+
+  .markdown-preview :global(.more-marker) {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 2rem 0;
+    color: #a3a3a3;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .markdown-preview :global(.more-marker)::before,
+  .markdown-preview :global(.more-marker)::after {
+    content: '';
+    flex: 1;
+    border-top: 2px dashed #d4d4d4;
+  }
+
+  :global(.dark .markdown-preview .more-marker)::before,
+  :global(.dark .markdown-preview .more-marker)::after {
+    border-top-color: #525252;
   }
 </style>
