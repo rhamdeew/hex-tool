@@ -169,6 +169,27 @@ export class BackendService {
     await invoke('delete_image', { projectPath, imagePath });
   }
 
+  async listImageFolders(): Promise<string[]> {
+    const projectPath = this.ensureProject();
+    return invoke<string[]>('list_image_folders', { projectPath });
+  }
+
+  async createImageFolder(parent: string, name: string): Promise<string> {
+    const projectPath = this.ensureProject();
+    return invoke<string>('create_image_folder', { projectPath, parent, name });
+  }
+
+  async renameImageFolder(folder: string, newName: string): Promise<string> {
+    const projectPath = this.ensureProject();
+    return invoke<string>('rename_image_folder', { projectPath, folder, newName });
+  }
+
+  /** Rejects with `FOLDER_NOT_EMPTY` when `recursive` is false and the folder has contents. */
+  async deleteImageFolder(folder: string, recursive: boolean): Promise<void> {
+    const projectPath = this.ensureProject();
+    await invoke('delete_image_folder', { projectPath, folder, recursive });
+  }
+
   // ====================
   // App Config Commands
   // ====================

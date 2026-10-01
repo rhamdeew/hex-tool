@@ -618,6 +618,158 @@ pub fn delete_image(project_path: String, image_path: String) -> Result<(), Stri
 }
 
 // ====================
+// Image Folder Commands
+// ====================
+
+/// Resolve a folder path relative to the images dir, rejecting anything
+/// that could escape it (absolute paths, `..`, etc.).
+fn resolve_image_folder(images_dir: &Path, folder: &str) -> Result<PathBuf, String> {
+    use std::path::Component;
+
+    let trimmed = folder.trim().trim_matches('/');
+    if trimmed.is_empty() {
+        return Err("Folder path is empty".to_string());
+    }
+
+    let relative = Path::new(trimmed);
+    if !relative
+        .components()
+        .all(|c| matches!(c, Component::Normal(_)))
+    {
+        return Err("Invalid folder path".to_string());
+    }
+
+    Ok(images_dir.join(relative))
+}
+
+fn validate_folder_name(name: &str) -> Result<&str, String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("Folder name is empty".to_string());
+    }
+    if name == "." || name == ".." || name.contains('/') || name.contains('\\') {
+        return Err("Folder name must not contain path separators".to_string());
+    }
+    Ok(name)
+}
+
+#[command]
+pub fn list_image_folders(project_path: String) -> Result<Vec<String>, String> {
+    let project = HexoProject::new(PathBuf::from(&project_path));
+    let images_dir = project.get_images_dir();
+
+    if !images_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut folders: Vec<String> = walkdir::WalkDir::new(&images_dir)
+        .min_depth(1)
+        .max_depth(10)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_dir())
+        .filter_map(|e| {
+            e.path()
+                .strip_prefix(&images_dir)
+                .ok()
+                .and_then(|p| p.to_str())
+                .map(|s| s.replace('\\', "/"))
+        })
+        .collect();
+
+    folders.sort();
+    Ok(folders)
+}
+
+#[command]
+pub fn create_image_folder(
+    project_path: String,
+    parent: String,
+    name: String,
+) -> Result<String, String> {
+    let project = HexoProject::new(PathBuf::from(&project_path));
+    let images_dir = project.get_images_dir();
+    let name = validate_folder_name(&name)?;
+
+    let relative = match parent.trim().trim_matches('/') {
+        "" => name.to_string(),
+        p => format!("{}/{}", p, name),
+    };
+    let target = resolve_image_folder(&images_dir, &relative)?;
+
+    if target.exists() {
+        return Err(format!("Folder \"{}\" already exists", name));
+    }
+
+    fs::create_dir_all(&target).map_err(|e| format!("Failed to create folder: {}", e))?;
+    Ok(relative)
+}
+
+#[command]
+pub fn rename_image_folder(
+    project_path: String,
+    folder: String,
+    new_name: String,
+) -> Result<String, String> {
+    let project = HexoProject::new(PathBuf::from(&project_path));
+    let images_dir = project.get_images_dir();
+    let new_name = validate_folder_name(&new_name)?;
+
+    let source = resolve_image_folder(&images_dir, &folder)?;
+    if !source.is_dir() {
+        return Err("Folder not found".to_string());
+    }
+
+    let target = source
+        .parent()
+        .ok_or("Invalid folder path")?
+        .join(new_name);
+    if target.exists() {
+        return Err(format!("Folder \"{}\" already exists", new_name));
+    }
+
+    fs::rename(&source, &target).map_err(|e| format!("Failed to rename folder: {}", e))?;
+
+    target
+        .strip_prefix(&images_dir)
+        .ok()
+        .and_then(|p| p.to_str())
+        .map(|s| s.replace('\\', "/"))
+        .ok_or_else(|| "Failed to get relative path".to_string())
+}
+
+/// Deletes an image folder. Without `recursive`, fails with `FOLDER_NOT_EMPTY`
+/// when the folder has any contents so the UI can ask for confirmation.
+#[command]
+pub fn delete_image_folder(
+    project_path: String,
+    folder: String,
+    recursive: bool,
+) -> Result<(), String> {
+    let project = HexoProject::new(PathBuf::from(&project_path));
+    let images_dir = project.get_images_dir();
+    let target = resolve_image_folder(&images_dir, &folder)?;
+
+    if !target.is_dir() {
+        return Err("Folder not found".to_string());
+    }
+
+    if recursive {
+        fs::remove_dir_all(&target)
+    } else {
+        let is_empty = fs::read_dir(&target)
+            .map_err(|e| format!("Failed to read folder: {}", e))?
+            .next()
+            .is_none();
+        if !is_empty {
+            return Err("FOLDER_NOT_EMPTY".to_string());
+        }
+        fs::remove_dir(&target)
+    }
+    .map_err(|e| format!("Failed to delete folder: {}", e))
+}
+
+// ====================
 // App Config Commands
 // ====================
 
@@ -976,5 +1128,46 @@ mod tests {
         // The copy url should still be under sub/
         let url = result.unwrap();
         assert!(url.starts_with("/images/sub/"), "duplicate url should still be in subfolder: {}", url);
+    }
+    #[test]
+    fn create_list_rename_delete_image_folders() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = setup_project(&tmp);
+
+        let created = create_image_folder(project_path.clone(), "".into(), "trips".into()).unwrap();
+        assert_eq!(created, "trips");
+        let nested =
+            create_image_folder(project_path.clone(), "trips".into(), "2024".into()).unwrap();
+        assert_eq!(nested, "trips/2024");
+        assert!(create_image_folder(project_path.clone(), "".into(), "trips".into()).is_err());
+
+        let folders = list_image_folders(project_path.clone()).unwrap();
+        assert_eq!(folders, vec!["trips".to_string(), "trips/2024".to_string()]);
+
+        let renamed =
+            rename_image_folder(project_path.clone(), "trips/2024".into(), "2025".into()).unwrap();
+        assert_eq!(renamed, "trips/2025");
+        assert!(tmp.path().join("source/images/trips/2025").is_dir());
+
+        // Non-empty folder requires recursive delete
+        let err = delete_image_folder(project_path.clone(), "trips".into(), false).unwrap_err();
+        assert_eq!(err, "FOLDER_NOT_EMPTY");
+        delete_image_folder(project_path.clone(), "trips/2025".into(), false).unwrap();
+        fs::write(tmp.path().join("source/images/trips/a.png"), b"x").unwrap();
+        delete_image_folder(project_path.clone(), "trips".into(), true).unwrap();
+        assert!(!tmp.path().join("source/images/trips").exists());
+    }
+
+    #[test]
+    fn image_folder_paths_cannot_escape_images_dir() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = setup_project(&tmp);
+
+        assert!(create_image_folder(project_path.clone(), "..".into(), "x".into()).is_err());
+        assert!(create_image_folder(project_path.clone(), "".into(), "a/b".into()).is_err());
+        assert!(create_image_folder(project_path.clone(), "".into(), "..".into()).is_err());
+        assert!(delete_image_folder(project_path.clone(), "../..".into(), true).is_err());
+        assert!(delete_image_folder(project_path.clone(), "".into(), true).is_err());
+        assert!(rename_image_folder(project_path.clone(), "../images".into(), "x".into()).is_err());
     }
 }

@@ -402,6 +402,9 @@
   <ImageGallery
     bind:open={showImageGallery}
     {images}
+    onImagesChanged={async () => {
+      images = await backend.listImages();
+    }}
     onSelect={handleImageSelect}
     onDelete={handleImageDelete}
     onUpload={handleUploadImage}

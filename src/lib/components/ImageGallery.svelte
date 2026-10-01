@@ -6,9 +6,12 @@
     Trash2,
     Image as ImageIcon,
     Folder,
+    FolderPlus,
+    Pencil,
     ArrowLeft
   } from 'lucide-svelte';
   import { convertFileSrc } from '@tauri-apps/api/core';
+  import { confirm } from '@tauri-apps/plugin-dialog';
   import { backend } from '$lib/services/backend';
   import type { ImageInfo } from '$lib/types';
 
@@ -22,6 +25,16 @@
     onSelect?: (image: ImageInfo) => void;
     onDelete?: (image: ImageInfo) => void;
     onUpload?: (folder: string) => void;
+    /** Called after folder operations that move or remove images. */
+    onImagesChanged?: () => void | Promise<void>;
+  }
+
+  interface FolderDialog {
+    mode: 'create' | 'rename';
+    /** Folder being renamed (rename mode only) */
+    path: string;
+    value: string;
+    error: string;
   }
 
   let {
@@ -29,13 +42,33 @@
     images,
     onSelect,
     onDelete,
-    onUpload
+    onUpload,
+    onImagesChanged
   }: Props = $props();
 
   let searchQuery = $state('');
   let sortBy = $state<'name' | 'date' | 'size'>('date');
   let selectedImage = $state<ImageInfo | null>(null);
   let currentFolder = $state('');
+  let folders = $state<string[]>([]);
+  let folderDialog = $state<FolderDialog | null>(null);
+  let folderBusy = $state(false);
+
+  async function loadFolders() {
+    try {
+      folders = await backend.listImageFolders();
+    } catch (err) {
+      console.error('Failed to load image folders:', err);
+    }
+  }
+
+  $effect(() => {
+    if (open) {
+      loadFolders();
+    } else {
+      folderDialog = null;
+    }
+  });
 
   const resolveImageSrc = (image: ImageInfo) => {
     if (image.fullPath) return convertFileSrc(image.fullPath);
@@ -68,7 +101,15 @@
   let folderSegments = $derived(currentFolder ? currentFolder.split('/').filter(Boolean) : []);
 
   let folderEntries = $derived((() => {
-    const folders = new Map<string, number>();
+    const entries = new Map<string, number>();
+
+    // Include folders from disk so empty folders are visible too
+    for (const folder of folders) {
+      const parentPrefix = currentFolder ? `${currentFolder}/` : '';
+      if (!folder.startsWith(parentPrefix)) continue;
+      const child = folder.slice(parentPrefix.length).split('/')[0];
+      if (child && !entries.has(child)) entries.set(child, 0);
+    }
 
     for (const image of imagesWithSrc) {
       const dir = getImageDir(image);
@@ -77,7 +118,7 @@
       if (!currentFolder) {
         const child = dir.split('/')[0];
         if (!child) continue;
-        folders.set(child, (folders.get(child) ?? 0) + 1);
+        entries.set(child, (entries.get(child) ?? 0) + 1);
         continue;
       }
 
@@ -85,12 +126,12 @@
         const remainder = dir.slice(currentFolder.length + 1);
         const child = remainder.split('/')[0];
         if (child) {
-          folders.set(child, (folders.get(child) ?? 0) + 1);
+          entries.set(child, (entries.get(child) ?? 0) + 1);
         }
       }
     }
 
-    return Array.from(folders.entries())
+    return Array.from(entries.entries())
       .map(([name, count]) => ({
         name,
         count,
@@ -141,8 +182,8 @@
     open = false;
   }
 
-  function handleDelete(image: ImageInfo) {
-    if (confirm(`Delete "${image.filename}"?`)) {
+  async function handleDelete(image: ImageInfo) {
+    if (await confirm(`Delete "${image.filename}"?`, { title: 'Delete image', kind: 'warning' })) {
       onDelete?.(image);
     }
   }
@@ -172,6 +213,93 @@
   function goToBreadcrumb(index: number) {
     currentFolder = folderSegments.slice(0, index + 1).join('/');
     selectedImage = null;
+  }
+
+  function errorMessage(err: unknown): string {
+    if (err instanceof Error) return err.message;
+    return typeof err === 'string' ? err : 'Unknown error';
+  }
+
+  function openCreateFolder() {
+    folderDialog = { mode: 'create', path: '', value: '', error: '' };
+  }
+
+  function openRenameFolder(path: string) {
+    const name = path.split('/').pop() ?? '';
+    folderDialog = { mode: 'rename', path, value: name, error: '' };
+  }
+
+  async function submitFolderDialog() {
+    const dialog = folderDialog;
+    if (!dialog || folderBusy) return;
+
+    const name = dialog.value.trim();
+    if (!name) {
+      dialog.error = 'Folder name is required';
+      return;
+    }
+    if (name.includes('/') || name.includes('\\') || name === '.' || name === '..') {
+      dialog.error = 'Folder name must not contain "/" or "\\"';
+      return;
+    }
+
+    folderBusy = true;
+    try {
+      if (dialog.mode === 'create') {
+        await backend.createImageFolder(currentFolder, name);
+        await loadFolders();
+      } else {
+        const oldName = dialog.path.split('/').pop();
+        if (name === oldName) {
+          folderDialog = null;
+          return;
+        }
+        const confirmed = await confirm(
+          `Rename folder "${oldName}" to "${name}"?\n\n` +
+            `Posts and pages that reference images in this folder ` +
+            `(e.g. /images/${dialog.path}/...) will have broken links ` +
+            `until you update them manually.`,
+          { title: 'Rename folder', kind: 'warning', okLabel: 'Rename' }
+        );
+        if (!confirmed) return;
+
+        await backend.renameImageFolder(dialog.path, name);
+        await Promise.all([loadFolders(), onImagesChanged?.()]);
+      }
+      folderDialog = null;
+    } catch (err) {
+      dialog.error = errorMessage(err);
+    } finally {
+      folderBusy = false;
+    }
+  }
+
+  async function handleDeleteFolder(path: string, imageCount: number) {
+    const name = path.split('/').pop();
+    try {
+      try {
+        await backend.deleteImageFolder(path, false);
+      } catch (err) {
+        if (errorMessage(err) !== 'FOLDER_NOT_EMPTY') throw err;
+
+        const contents =
+          imageCount > 0
+            ? `${imageCount} image${imageCount === 1 ? '' : 's'}`
+            : 'files or subfolders';
+        const confirmed = await confirm(
+          `Folder "${name}" is not empty. It contains ${contents}.\n\n` +
+            `Delete the folder and everything in it? This cannot be undone.`,
+          { title: 'Delete folder', kind: 'warning', okLabel: 'Delete' }
+        );
+        if (!confirmed) return;
+
+        await backend.deleteImageFolder(path, true);
+      }
+      await Promise.all([loadFolders(), onImagesChanged?.()]);
+    } catch (err) {
+      console.error('Failed to delete folder:', err);
+      alert('Failed to delete folder: ' + errorMessage(err));
+    }
   }
 
   $effect(() => {
@@ -269,7 +397,56 @@
             </button>
           {/each}
         </div>
+        <button class="new-folder-btn" onclick={openCreateFolder} type="button">
+          <FolderPlus size={16} />
+          <span>New folder</span>
+        </button>
       </div>
+
+      {#if folderDialog}
+        <form
+          class="folder-form"
+          onsubmit={(e) => {
+            e.preventDefault();
+            submitFolderDialog();
+          }}
+        >
+          <label class="folder-form-label" for="folder-name-input">
+            {folderDialog.mode === 'create' ? 'New folder name' : 'Rename folder to'}
+          </label>
+          <!-- svelte-ignore a11y_autofocus -->
+          <input
+            id="folder-name-input"
+            class="folder-form-input"
+            type="text"
+            bind:value={folderDialog.value}
+            oninput={() => folderDialog && (folderDialog.error = '')}
+            onkeydown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                folderDialog = null;
+              }
+            }}
+            disabled={folderBusy}
+            autofocus
+          />
+          <button class="folder-form-submit" type="submit" disabled={folderBusy}>
+            {folderDialog.mode === 'create' ? 'Create' : 'Rename'}
+          </button>
+          <button
+            class="folder-form-cancel"
+            type="button"
+            onclick={() => (folderDialog = null)}
+            disabled={folderBusy}
+          >
+            Cancel
+          </button>
+          {#if folderDialog.error}
+            <p class="folder-form-error">{folderDialog.error}</p>
+          {/if}
+        </form>
+      {/if}
 
       <!-- Images Grid -->
       <div class="images-grid">
@@ -293,6 +470,32 @@
               <div class="folder-info">
                 <p class="folder-name" title={folder.name}>{folder.name}</p>
                 <p class="folder-meta">{folder.count} image{folder.count === 1 ? '' : 's'}</p>
+              </div>
+              <div class="folder-actions">
+                <button
+                  class="folder-action-btn"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    openRenameFolder(folder.path);
+                  }}
+                  type="button"
+                  aria-label="Rename folder"
+                  title="Rename folder"
+                >
+                  <Pencil size={14} />
+                </button>
+                <button
+                  class="folder-action-btn danger"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteFolder(folder.path, folder.count);
+                  }}
+                  type="button"
+                  aria-label="Delete folder"
+                  title="Delete folder"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
             </div>
           {/each}
@@ -601,6 +804,159 @@
   .folder-up-btn:disabled {
     cursor: not-allowed;
     opacity: 0.6;
+  }
+
+  .new-folder-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: auto;
+    padding: 0.35rem 0.65rem;
+    border-radius: 0.375rem;
+    border: 1px solid #e5e5e5;
+    background-color: #ffffff;
+    color: #374151;
+    cursor: pointer;
+    font-size: 0.75rem;
+  }
+
+  .new-folder-btn:hover {
+    border-color: #bfdbfe;
+  }
+
+  :global(.dark .new-folder-btn) {
+    background-color: #404040;
+    border-color: #525252;
+    color: #e5e7eb;
+  }
+
+  .folder-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-bottom: 1px solid #e5e5e5;
+  }
+
+  :global(.dark .folder-form) {
+    border-bottom-color: #404040;
+  }
+
+  .folder-form-label {
+    font-size: 0.8125rem;
+    color: #374151;
+  }
+
+  :global(.dark .folder-form-label) {
+    color: #e5e7eb;
+  }
+
+  .folder-form-input {
+    flex: 1;
+    min-width: 160px;
+    padding: 0.4rem 0.6rem;
+    background-color: #ffffff;
+    border: 1px solid #e5e5e5;
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    color: #1a1a1a;
+  }
+
+  .folder-form-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  :global(.dark .folder-form-input) {
+    background-color: #404040;
+    border-color: #525252;
+    color: #f5f5f5;
+  }
+
+  .folder-form-submit,
+  .folder-form-cancel {
+    padding: 0.4rem 0.9rem;
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    cursor: pointer;
+  }
+
+  .folder-form-submit {
+    background-color: #3b82f6;
+    color: white;
+    border: none;
+  }
+
+  .folder-form-submit:hover {
+    background-color: #2563eb;
+  }
+
+  .folder-form-cancel {
+    background-color: transparent;
+    border: 1px solid #e5e5e5;
+    color: #374151;
+  }
+
+  :global(.dark .folder-form-cancel) {
+    border-color: #525252;
+    color: #e5e7eb;
+  }
+
+  .folder-form-submit:disabled,
+  .folder-form-cancel:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .folder-form-error {
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 0.75rem;
+    color: #dc2626;
+  }
+
+  .folder-actions {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    display: flex;
+    gap: 0.25rem;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+
+  .folder-card:hover .folder-actions,
+  .folder-card:focus-within .folder-actions {
+    opacity: 1;
+  }
+
+  .folder-action-btn {
+    display: flex;
+    padding: 0.25rem;
+    background-color: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 0.25rem;
+    color: #374151;
+    cursor: pointer;
+  }
+
+  .folder-action-btn.danger {
+    color: #dc2626;
+  }
+
+  .folder-action-btn:hover {
+    background-color: #ffffff;
+  }
+
+  :global(.dark .folder-action-btn) {
+    background-color: rgba(0, 0, 0, 0.8);
+    color: #e5e7eb;
+  }
+
+  :global(.dark .folder-action-btn.danger) {
+    color: #f87171;
   }
 
   .breadcrumbs {
