@@ -49,6 +49,21 @@ export class BackendService {
     return path;
   }
 
+  async activateProject(path: string): Promise<void> {
+    await invoke('activate_project', { projectPath: path });
+    this.setProjectPath(path);
+  }
+
+  /** Re-grants asset access for the project path persisted from a previous session. */
+  async restoreProject(): Promise<void> {
+    if (!this.projectPath) return;
+    try {
+      await invoke('activate_project', { projectPath: this.projectPath });
+    } catch (err) {
+      console.error('Failed to restore project access:', err);
+    }
+  }
+
   async getProjectConfig(): Promise<HexoConfig> {
     const projectPath = this.ensureProject();
     return invoke<HexoConfig>('get_project_config', { projectPath });

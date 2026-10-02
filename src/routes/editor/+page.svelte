@@ -35,6 +35,7 @@
     SlidersHorizontal
   } from 'lucide-svelte';
   import { convertFileSrc } from '@tauri-apps/api/core';
+  import { getCurrentWebview } from '@tauri-apps/api/webview';
   import { confirm, open } from '@tauri-apps/plugin-dialog';
   import ImageGallery from '$lib/components/ImageGallery.svelte';
   import { backend } from '$lib/services/backend';
@@ -68,6 +69,26 @@
 
   // Editor refs
   let textareaRef = $state<HTMLTextAreaElement | null>(null);
+  let dragActive = $state(false);
+  let droppedImagePath = $state<string | null>(null);
+  let dragDropCleanup: (() => void) | null = null;
+
+  const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
+
+  // Drag-drop positions arrive in physical pixels
+  function isPositionOverTextarea(position: { x: number; y: number }): boolean {
+    if (!textareaRef) return false;
+    const rect = textareaRef.getBoundingClientRect();
+    const x = position.x / window.devicePixelRatio;
+    const y = position.y / window.devicePixelRatio;
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  }
+
+  $effect(() => {
+    if (!showImageGallery) {
+      droppedImagePath = null;
+    }
+  });
   let autoSaveTimer: ReturnType<typeof setInterval> | null = null;
 
   // Resizable panel
@@ -282,6 +303,37 @@
       }
     }, 30000);
 
+    // Tauri intercepts OS file drags, so HTML5 drop events never get real paths
+    dragDropCleanup = await getCurrentWebview().onDragDropEvent((event) => {
+      if (event.payload.type === 'leave') {
+        dragActive = false;
+        return;
+      }
+
+      if (event.payload.type === 'enter' || event.payload.type === 'over') {
+        dragActive = isPositionOverTextarea(event.payload.position);
+        return;
+      }
+
+      if (event.payload.type === 'drop') {
+        dragActive = false;
+        if (showImageGallery) return;
+        if (!isPositionOverTextarea(event.payload.position)) return;
+
+        const path = event.payload.paths[0];
+        if (!path) return;
+
+        const extension = path.split('.').pop()?.toLowerCase();
+        if (!extension || !IMAGE_EXTENSIONS.includes(extension)) {
+          alert(`Only image files can be dropped here (${IMAGE_EXTENSIONS.join(', ')}).`);
+          return;
+        }
+
+        droppedImagePath = path;
+        pendingImageField = { kind: 'content' };
+        showImageGallery = true;
+      }
+    });
   });
 
   onDestroy(() => {
@@ -290,6 +342,9 @@
     }
     if (autoSaveTimer) {
       clearInterval(autoSaveTimer);
+    }
+    if (dragDropCleanup) {
+      dragDropCleanup();
     }
   });
 
@@ -540,7 +595,7 @@
         multiple: false,
         filters: [{
           name: 'Images',
-          extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']
+          extensions: IMAGE_EXTENSIONS
         }]
       });
 
@@ -549,17 +604,31 @@
       const sourcePath = typeof selected === 'string' ? selected : selected[0];
       if (!sourcePath) return;
 
-      const imageUrl = await backend.copyImageToProject(sourcePath, folder);
-      images = await backend.listImages();
-
-      // Find the newly uploaded image and select it
-      const newImage = images.find(img => img.url === imageUrl);
-      if (newImage) {
-        handleImageSelect(newImage);
-      }
+      await uploadImageAndSelect(sourcePath, folder);
     } catch (err) {
       console.error('Failed to upload image:', err);
       alert('Failed to upload image: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  }
+
+  async function handleDroppedImageUpload(folder: string) {
+    if (!droppedImagePath) return;
+    try {
+      await uploadImageAndSelect(droppedImagePath, folder);
+    } catch (err) {
+      console.error('Failed to upload dropped image:', err);
+      alert('Failed to upload image: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  }
+
+  async function uploadImageAndSelect(sourcePath: string, folder: string) {
+    const imageUrl = await backend.copyImageToProject(sourcePath, folder);
+    images = await backend.listImages();
+
+    // Find the newly uploaded image and select it
+    const newImage = images.find(img => img.url === imageUrl);
+    if (newImage) {
+      handleImageSelect(newImage);
     }
   }
 
@@ -1229,6 +1298,7 @@
             bind:value={markdownContent}
             oninput={handleContentChange}
             class="markdown-editor"
+            class:drag-active={dragActive}
             placeholder="Write your content in Markdown..."
             spellcheck="true"
           ></textarea>
@@ -1273,6 +1343,8 @@
     onSelect={handleImageSelect}
     onUpload={handleImageUpload}
     onDelete={handleImageDelete}
+    dropUploadPath={droppedImagePath}
+    onUploadDropped={handleDroppedImageUpload}
   />
 </div>
 
@@ -2044,6 +2116,16 @@
 
   .markdown-editor:focus {
     outline: none;
+  }
+
+  .markdown-editor.drag-active {
+    outline: 2px dashed #3b82f6;
+    outline-offset: -2px;
+    background-color: #eff6ff;
+  }
+
+  :global(.dark .markdown-editor.drag-active) {
+    background-color: #1e3a5f;
   }
 
   .markdown-editor::placeholder {

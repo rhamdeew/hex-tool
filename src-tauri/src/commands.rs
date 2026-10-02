@@ -8,9 +8,18 @@ use crate::frontmatter_config::{
     generate_frontmatter_config, load_frontmatter_config, FrontmatterConfig,
 };
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use tauri::command;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
+
+/// Grants the asset protocol read access to `project_path`, scoping
+/// `convertFileSrc`/`asset://` loads to that directory instead of the
+/// whole filesystem.
+fn grant_asset_scope(app: &AppHandle, project_path: &Path) -> Result<(), String> {
+    app.asset_protocol_scope()
+        .allow_directory(project_path, true)
+        .map_err(|e| format!("Failed to grant asset access to project directory: {}", e))
+}
 
 // ====================
 // Project Commands
@@ -32,9 +41,11 @@ pub async fn select_project_folder(app: AppHandle) -> Result<String, String> {
         let path_string = path_buf.to_string_lossy().to_string();
 
         // Validate it's a Hexo project
-        let project = HexoProject::new(path_buf);
+        let project = HexoProject::new(path_buf.clone());
         match project.validate() {
             Ok(_) => {
+                grant_asset_scope(&app, &path_buf)?;
+
                 // Add to recent projects
                 let mut config = crate::config::AppConfig::load()
                     .unwrap_or_default();
@@ -56,6 +67,15 @@ pub async fn select_project_folder(app: AppHandle) -> Result<String, String> {
     } else {
         Err("No folder selected".to_string())
     }
+}
+
+/// Grants asset access for a project opened without the folder picker
+/// (recent projects list, "Continue with", or a path restored on startup).
+#[command]
+pub fn activate_project(app: AppHandle, project_path: String) -> Result<(), String> {
+    let path = PathBuf::from(&project_path);
+    HexoProject::new(path.clone()).validate()?;
+    grant_asset_scope(&app, &path)
 }
 
 #[command]
@@ -194,18 +214,15 @@ pub fn list_posts(project_path: String) -> Result<Vec<Post>, String> {
 
 #[command]
 pub fn get_post(project_path: String, post_id: String) -> Result<Post, String> {
-    let file_path = Path::new(&project_path).join(&post_id);
-
-    if !file_path.exists() {
-        return Err("Post not found".to_string());
-    }
+    let file_path = resolve_existing_content_path(&project_path, &post_id, "Post not found")?;
 
     Post::from_file(&file_path, Path::new(&project_path))
 }
 
 #[command]
-pub fn save_post(_project_path: String, post: Post) -> Result<(), String> {
+pub fn save_post(project_path: String, post: Post) -> Result<(), String> {
     let file_path = Path::new(&post.file_path);
+    ensure_within(Path::new(&project_path), file_path)?;
 
     let markdown = post.to_markdown()?;
 
@@ -217,18 +234,15 @@ pub fn save_post(_project_path: String, post: Post) -> Result<(), String> {
 
 #[command]
 pub fn get_page(project_path: String, page_id: String) -> Result<Page, String> {
-    let file_path = Path::new(&project_path).join(&page_id);
-
-    if !file_path.exists() {
-        return Err("Page not found".to_string());
-    }
+    let file_path = resolve_existing_content_path(&project_path, &page_id, "Page not found")?;
 
     Page::from_file(&file_path, Path::new(&project_path))
 }
 
 #[command]
-pub fn save_page(_project_path: String, page: Page) -> Result<(), String> {
+pub fn save_page(project_path: String, page: Page) -> Result<(), String> {
     let file_path = Path::new(&page.file_path);
+    ensure_within(Path::new(&project_path), file_path)?;
 
     let markdown = page.to_markdown()?;
 
@@ -284,18 +298,15 @@ pub fn create_post(project_path: String, title: String) -> Result<Post, String> 
 
 #[command]
 pub fn get_draft(project_path: String, draft_id: String) -> Result<Draft, String> {
-    let file_path = Path::new(&project_path).join(&draft_id);
-
-    if !file_path.exists() {
-        return Err("Draft not found".to_string());
-    }
+    let file_path = resolve_existing_content_path(&project_path, &draft_id, "Draft not found")?;
 
     Draft::from_file(&file_path, Path::new(&project_path))
 }
 
 #[command]
-pub fn save_draft(_project_path: String, draft: Draft) -> Result<(), String> {
+pub fn save_draft(project_path: String, draft: Draft) -> Result<(), String> {
     let file_path = Path::new(&draft.file_path);
+    ensure_within(Path::new(&project_path), file_path)?;
 
     let markdown = draft.to_markdown()?;
 
@@ -307,25 +318,12 @@ pub fn save_draft(_project_path: String, draft: Draft) -> Result<(), String> {
 
 #[command]
 pub fn delete_post(project_path: String, post_id: String) -> Result<(), String> {
-    let file_path = Path::new(&project_path).join(&post_id);
-
-    if !file_path.exists() {
-        return Err("Post not found".to_string());
-    }
-
-    fs::remove_file(&file_path)
-        .map_err(|e| format!("Failed to delete post: {}", e))?;
-
-    Ok(())
+    delete_content_file(&project_path, &post_id, "Post not found", "Failed to delete post")
 }
 
 #[command]
 pub fn delete_page(project_path: String, page_id: String) -> Result<(), String> {
-    let file_path = Path::new(&project_path).join(&page_id);
-
-    if !file_path.exists() {
-        return Err("Page not found".to_string());
-    }
+    let file_path = resolve_existing_content_path(&project_path, &page_id, "Page not found")?;
 
     if let Some(parent) = file_path.parent() {
         if parent.file_name().and_then(|s| s.to_str()) == Some("source") {
@@ -497,16 +495,7 @@ pub fn create_draft(project_path: String, title: String) -> Result<Draft, String
 
 #[command]
 pub fn delete_draft(project_path: String, draft_id: String) -> Result<(), String> {
-    let file_path = Path::new(&project_path).join(&draft_id);
-
-    if !file_path.exists() {
-        return Err("Draft not found".to_string());
-    }
-
-    fs::remove_file(&file_path)
-        .map_err(|e| format!("Failed to delete draft: {}", e))?;
-
-    Ok(())
+    delete_content_file(&project_path, &draft_id, "Draft not found", "Failed to delete draft")
 }
 
 #[command]
@@ -587,10 +576,9 @@ pub fn copy_image_to_project(
     let project = HexoProject::new(PathBuf::from(&project_path));
     let images_dir = project.get_images_dir();
 
-    let target_dir = match subfolder.as_deref().filter(|s| !s.is_empty()) {
-        Some(sub) => images_dir.join(sub),
-        None => images_dir.clone(),
-    };
+    fs::create_dir_all(&images_dir)
+        .map_err(|e| format!("Failed to create images directory: {}", e))?;
+    let target_dir = resolve_relative_path(&images_dir, subfolder.as_deref().unwrap_or(""))?;
 
     // Create target directory if it doesn't exist
     fs::create_dir_all(&target_dir)
@@ -658,16 +646,7 @@ fn sanitize_image_filename(filename: &str) -> String {
 
 #[command]
 pub fn delete_image(project_path: String, image_path: String) -> Result<(), String> {
-    let file_path = Path::new(&project_path).join(&image_path);
-
-    if !file_path.exists() {
-        return Err("Image not found".to_string());
-    }
-
-    fs::remove_file(&file_path)
-        .map_err(|e| format!("Failed to delete image: {}", e))?;
-
-    Ok(())
+    delete_content_file(&project_path, &image_path, "Image not found", "Failed to delete image")
 }
 
 // ====================
@@ -677,8 +656,6 @@ pub fn delete_image(project_path: String, image_path: String) -> Result<(), Stri
 /// Resolve a folder path relative to the images dir, rejecting anything
 /// that could escape it (absolute paths, `..`, etc.).
 fn resolve_image_folder(images_dir: &Path, folder: &str) -> Result<PathBuf, String> {
-    use std::path::Component;
-
     let trimmed = folder.trim().trim_matches('/');
     if trimmed.is_empty() {
         return Err("Folder path is empty".to_string());
@@ -692,7 +669,12 @@ fn resolve_image_folder(images_dir: &Path, folder: &str) -> Result<PathBuf, Stri
         return Err("Invalid folder path".to_string());
     }
 
-    Ok(images_dir.join(relative))
+    let target = images_dir.join(relative);
+    // Catch symlinks inside the images dir that point outside of it
+    if images_dir.exists() {
+        ensure_within(images_dir, &target)?;
+    }
+    Ok(target)
 }
 
 fn validate_folder_name(name: &str) -> Result<&str, String> {
@@ -839,6 +821,108 @@ pub fn save_app_config(config: crate::config::AppConfig) -> Result<(), String> {
 // ====================
 // Helper Functions
 // ====================
+
+fn validate_relative_path(relative: &str) -> Result<PathBuf, String> {
+    if relative.is_empty() {
+        return Ok(PathBuf::new());
+    }
+
+    let path = Path::new(relative);
+    if path.is_absolute() {
+        return Err("Path must be relative".to_string());
+    }
+
+    for component in path.components() {
+        match component {
+            Component::Normal(_) | Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                return Err("Path must not contain parent or root segments".to_string());
+            }
+        }
+    }
+
+    Ok(path.to_path_buf())
+}
+
+/// Canonicalizes `path`, walking up to the nearest existing ancestor if
+/// `path` itself doesn't exist yet (e.g. a file about to be created), then
+/// re-appends the missing trailing components. This lets a path be checked
+/// against a required root even before it exists, so a symlinked ancestor
+/// can't be used to make the path *appear* to stay under that root.
+fn canonicalize_lossy(path: &Path) -> Result<PathBuf, String> {
+    let mut existing = path;
+    let mut missing_components: Vec<std::ffi::OsString> = Vec::new();
+
+    loop {
+        match existing.canonicalize() {
+            Ok(canonical) => {
+                let mut result = canonical;
+                for component in missing_components.into_iter().rev() {
+                    result.push(component);
+                }
+                return Ok(result);
+            }
+            Err(_) => {
+                if let Some(name) = existing.file_name() {
+                    missing_components.push(name.to_os_string());
+                }
+                match existing.parent() {
+                    Some(parent) => existing = parent,
+                    None => return Err("Failed to resolve path".to_string()),
+                }
+            }
+        }
+    }
+}
+
+/// Confirms `target` resolves to somewhere inside `base`, following symlinks.
+fn ensure_within(base: &Path, target: &Path) -> Result<(), String> {
+    let canonical_base = base
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve base directory: {}", e))?;
+    let canonical_target = canonicalize_lossy(target)?;
+
+    if !canonical_target.starts_with(&canonical_base) {
+        return Err("Path escapes the allowed directory".to_string());
+    }
+
+    Ok(())
+}
+
+/// Validates `relative` (rejecting `..`/absolute segments) and joins it onto
+/// `base`, then confirms the result really stays under `base` on disk.
+fn resolve_relative_path(base: &Path, relative: &str) -> Result<PathBuf, String> {
+    let relative_path = validate_relative_path(relative)?;
+    let target = base.join(&relative_path);
+    ensure_within(base, &target)?;
+    Ok(target)
+}
+
+/// Resolves `id` to an existing path under `project_path`, or `not_found_msg`.
+fn resolve_existing_content_path(
+    project_path: &str,
+    id: &str,
+    not_found_msg: &str,
+) -> Result<PathBuf, String> {
+    let file_path = resolve_relative_path(Path::new(project_path), id)?;
+    if !file_path.exists() {
+        return Err(not_found_msg.to_string());
+    }
+    Ok(file_path)
+}
+
+/// Deletes the file at `project_path`/`id` after validating it stays within
+/// the project directory.
+fn delete_content_file(
+    project_path: &str,
+    id: &str,
+    not_found_msg: &str,
+    fail_prefix: &str,
+) -> Result<(), String> {
+    let file_path = resolve_existing_content_path(project_path, id, not_found_msg)?;
+    fs::remove_file(&file_path).map_err(|e| format!("{}: {}", fail_prefix, e))?;
+    Ok(())
+}
 
 fn sanitize_filename(title: &str) -> String {
     use regex::Regex;
@@ -1222,6 +1306,49 @@ mod tests {
         assert!(delete_image_folder(project_path.clone(), "../..".into(), true).is_err());
         assert!(delete_image_folder(project_path.clone(), "".into(), true).is_err());
         assert!(rename_image_folder(project_path.clone(), "../images".into(), "x".into()).is_err());
+    }
+
+    #[test]
+    fn content_paths_cannot_escape_project() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = setup_project(&tmp);
+        let outside = TempDir::new().unwrap();
+        let victim = outside.path().join("victim.md");
+        fs::write(&victim, "---\ntitle: x\n---\n").unwrap();
+
+        let escape = "../".repeat(20) + victim.to_str().unwrap().trim_start_matches('/');
+        assert!(get_post(project_path.clone(), escape.clone()).is_err());
+        assert!(delete_post(project_path.clone(), escape.clone()).is_err());
+        assert!(delete_draft(project_path.clone(), escape.clone()).is_err());
+        assert!(delete_page(project_path.clone(), escape.clone()).is_err());
+        assert!(delete_image(project_path.clone(), escape).is_err());
+        assert!(delete_image(project_path.clone(), victim.to_str().unwrap().into()).is_err());
+        assert!(victim.exists(), "file outside the project must not be deleted");
+
+        let source = create_source_image(&tmp, "p.png");
+        assert!(copy_image_to_project(project_path.clone(), source, Some("../..".into())).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_and_symlink_escapes_are_rejected() {
+        let tmp = TempDir::new().unwrap();
+        let project_path = setup_project(&tmp);
+        let outside = TempDir::new().unwrap();
+
+        // A symlink inside the images dir pointing outside the project
+        std::os::unix::fs::symlink(outside.path(), tmp.path().join("source/images/link")).unwrap();
+        let source = create_source_image(&tmp, "s.png");
+        assert!(copy_image_to_project(project_path.clone(), source, Some("link".into())).is_err());
+        assert!(delete_image_folder(project_path.clone(), "link".into(), true).is_err());
+        assert!(outside.path().exists());
+
+        let post = create_post(project_path.clone(), "Hello".into()).unwrap();
+        let mut evil = post.clone();
+        evil.file_path = outside.path().join("evil.md").to_string_lossy().to_string();
+        assert!(save_post(project_path.clone(), evil).is_err());
+        assert!(!outside.path().join("evil.md").exists());
+        assert!(save_post(project_path, post).is_ok());
     }
 
     #[test]
